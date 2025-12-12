@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
+import 'services/workspace_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/workspace_screen.dart';
+import 'screens/workspace_list_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,11 +36,12 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authService = AuthService();
+    final workspaceService = WorkspaceService();
 
     return StreamBuilder(
       stream: authService.authStateChanges,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+      builder: (context, authSnapshot) {
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Color(0xFF1A1D21),
             body: Center(
@@ -47,11 +50,37 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        if (snapshot.hasData) {
-          return const WorkspaceScreen();
+        // If user is not logged in, show login screen
+        if (!authSnapshot.hasData) {
+          return const LoginScreen();
         }
 
-        return const LoginScreen();
+        // User is logged in, check if they have workspaces
+        final userId = authSnapshot.data!.uid;
+
+        return StreamBuilder(
+          stream: workspaceService.getUserWorkspacesStream(userId),
+          builder: (context, workspaceSnapshot) {
+            if (workspaceSnapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                backgroundColor: Color(0xFF1A1D21),
+                body: Center(
+                  child: CircularProgressIndicator(color: Color(0xFF4A9EFF)),
+                ),
+              );
+            }
+
+            final workspaces = workspaceSnapshot.data ?? [];
+
+            // If user has workspaces, show workspace list
+            if (workspaces.isNotEmpty) {
+              return const WorkspaceListScreen();
+            }
+
+            // If user has no workspaces, show workspace creation/join screen
+            return const WorkspaceScreen();
+          },
+        );
       },
     );
   }
