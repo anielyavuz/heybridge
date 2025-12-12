@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "132972912332",
+    "project_id": "heybridge-5f6ed",
+    "storage_bucket": "heybridge-5f6ed.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:132972912332:android:33a06d3123139f17ba2c69",
+        "android_client_info": {
+          "package_name": "com.example.heybridge"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8bN6UteEO5gN6zFSX47AxxBAd_6YA2LU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
