@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/logger_service.dart';
 import '../models/user_model.dart';
 import 'workspace_screen.dart';
 
@@ -17,9 +18,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _confirmPasswordController = TextEditingController();
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
+  final _logger = LoggerService();
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _logger.logUI('SignUpScreen', 'screen_opened');
+  }
 
   @override
   void dispose() {
@@ -30,24 +38,38 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _handleSignUp() async {
+    _logger.logUI('SignUpScreen', 'sign_up_button_pressed');
+
     if (_emailController.text.isEmpty ||
         _passwordController.text.isEmpty ||
         _confirmPasswordController.text.isEmpty) {
+      _logger.logUI('SignUpScreen', 'validation_failed',
+        data: {'reason': 'empty_fields'}
+      );
       _showError('Lütfen tüm alanları doldurun');
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
+      _logger.logUI('SignUpScreen', 'validation_failed',
+        data: {'reason': 'password_mismatch'}
+      );
       _showError('Şifreler eşleşmiyor');
       return;
     }
 
     if (_passwordController.text.length < 6) {
+      _logger.logUI('SignUpScreen', 'validation_failed',
+        data: {'reason': 'weak_password', 'length': _passwordController.text.length}
+      );
       _showError('Şifre en az 6 karakter olmalıdır');
       return;
     }
 
     setState(() => _isLoading = true);
+    _logger.logUI('SignUpScreen', 'sign_up_started',
+      data: {'email': _emailController.text.trim()}
+    );
 
     try {
       final userCredential = await _authService.signUpWithEmailAndPassword(
@@ -56,8 +78,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       if (userCredential?.user != null) {
+        _logger.log('Creating user model',
+          category: 'UI',
+          data: {'uid': userCredential!.user!.uid}
+        );
+
         final user = UserModel(
-          uid: userCredential!.user!.uid,
+          uid: userCredential.user!.uid,
           email: _emailController.text.trim(),
           displayName: _emailController.text.split('@')[0],
           createdAt: DateTime.now(),
@@ -66,15 +93,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
         );
 
         await _firestoreService.createUser(user);
+
+        _logger.logUI('SignUpScreen', 'user_created_successfully',
+          data: {'uid': user.uid, 'email': user.email}
+        );
       }
 
       if (mounted) {
+        _logger.logNavigation('SignUpScreen', 'WorkspaceScreen');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
         );
       }
     } catch (e) {
       if (mounted) {
+        _logger.logUI('SignUpScreen', 'sign_up_error',
+          data: {'error': e.toString()}
+        );
         _showError(e.toString());
       }
     } finally {

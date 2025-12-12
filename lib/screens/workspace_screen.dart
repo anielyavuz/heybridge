@@ -1,13 +1,27 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/logger_service.dart';
 import 'login_screen.dart';
 
-class WorkspaceScreen extends StatelessWidget {
+class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
 
   @override
+  State<WorkspaceScreen> createState() => _WorkspaceScreenState();
+}
+
+class _WorkspaceScreenState extends State<WorkspaceScreen> {
+  final _authService = AuthService();
+  final _logger = LoggerService();
+
+  @override
+  void initState() {
+    super.initState();
+    _logger.logUI('WorkspaceScreen', 'screen_opened');
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final authService = AuthService();
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1D21),
@@ -36,8 +50,10 @@ class WorkspaceScreen extends StatelessWidget {
                     const Spacer(),
                     IconButton(
                       onPressed: () async {
-                        await authService.signOut();
+                        _logger.logUI('WorkspaceScreen', 'logout_button_pressed');
+                        await _authService.signOut();
                         if (context.mounted) {
+                          _logger.logNavigation('WorkspaceScreen', 'LoginScreen');
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
                               builder: (_) => const LoginScreen(),
@@ -122,6 +138,7 @@ class WorkspaceScreen extends StatelessWidget {
                   ),
                   child: InkWell(
                     onTap: () {
+                      _logger.logUI('WorkspaceScreen', 'create_workspace_button_pressed');
                       _showCreateWorkspaceDialog(context);
                     },
                     borderRadius: BorderRadius.circular(12),
@@ -184,6 +201,7 @@ class WorkspaceScreen extends StatelessWidget {
                   ),
                   child: InkWell(
                     onTap: () {
+                      _logger.logUI('WorkspaceScreen', 'join_workspace_button_pressed');
                       _showJoinWorkspaceDialog(context);
                     },
                     borderRadius: BorderRadius.circular(12),
@@ -253,6 +271,8 @@ class WorkspaceScreen extends StatelessWidget {
   void _showCreateWorkspaceDialog(BuildContext context) {
     final nameController = TextEditingController();
 
+    _logger.logUI('WorkspaceScreen', 'create_workspace_dialog_opened');
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -287,11 +307,17 @@ class WorkspaceScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              _logger.logUI('WorkspaceScreen', 'create_workspace_dialog_cancelled');
+              Navigator.of(context).pop();
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
+              _logger.logUI('WorkspaceScreen', 'create_workspace_confirmed',
+                data: {'workspaceName': nameController.text}
+              );
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(
@@ -306,6 +332,8 @@ class WorkspaceScreen extends StatelessWidget {
 
   void _showJoinWorkspaceDialog(BuildContext context) {
     final codeController = TextEditingController();
+
+    _logger.logUI('WorkspaceScreen', 'join_workspace_dialog_opened');
 
     showDialog(
       context: context,
@@ -341,11 +369,17 @@ class WorkspaceScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              _logger.logUI('WorkspaceScreen', 'join_workspace_dialog_cancelled');
+              Navigator.of(context).pop();
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
+              _logger.logUI('WorkspaceScreen', 'join_workspace_confirmed',
+                data: {'inviteCode': codeController.text}
+              );
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(

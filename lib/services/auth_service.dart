@@ -1,7 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'logger_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final _logger = LoggerService();
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
@@ -10,11 +12,31 @@ class AuthService {
   Future<UserCredential?> signInWithEmailAndPassword(
       String email, String password) async {
     try {
-      return await _auth.signInWithEmailAndPassword(
+      _logger.log('Attempting to sign in',
+        category: 'AUTH',
+        data: {'email': email}
+      );
+
+      final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      _logger.logAuth('sign_in', success: true);
+      _logger.log('User signed in successfully',
+        level: LogLevel.success,
+        category: 'AUTH',
+        data: {'email': email, 'uid': credential.user?.uid}
+      );
+
+      return credential;
     } on FirebaseAuthException catch (e) {
+      _logger.logAuth('sign_in', success: false, error: e.code);
+      _logger.log('Sign in failed',
+        level: LogLevel.error,
+        category: 'AUTH',
+        data: {'email': email, 'errorCode': e.code, 'errorMessage': e.message}
+      );
       throw _handleAuthException(e);
     }
   }
@@ -22,17 +44,50 @@ class AuthService {
   Future<UserCredential?> signUpWithEmailAndPassword(
       String email, String password) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(
+      _logger.log('Attempting to sign up',
+        category: 'AUTH',
+        data: {'email': email}
+      );
+
+      final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      _logger.logAuth('sign_up', success: true);
+      _logger.log('User signed up successfully',
+        level: LogLevel.success,
+        category: 'AUTH',
+        data: {'email': email, 'uid': credential.user?.uid}
+      );
+
+      return credential;
     } on FirebaseAuthException catch (e) {
+      _logger.logAuth('sign_up', success: false, error: e.code);
+      _logger.log('Sign up failed',
+        level: LogLevel.error,
+        category: 'AUTH',
+        data: {'email': email, 'errorCode': e.code, 'errorMessage': e.message}
+      );
       throw _handleAuthException(e);
     }
   }
 
   Future<void> signOut() async {
+    final uid = _auth.currentUser?.uid;
+    _logger.log('Attempting to sign out',
+      category: 'AUTH',
+      data: {'uid': uid}
+    );
+
     await _auth.signOut();
+
+    _logger.logAuth('sign_out', success: true);
+    _logger.log('User signed out successfully',
+      level: LogLevel.success,
+      category: 'AUTH',
+      data: {'uid': uid}
+    );
   }
 
   String _handleAuthException(FirebaseAuthException e) {

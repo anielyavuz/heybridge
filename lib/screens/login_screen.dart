@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/logger_service.dart';
 import 'sign_up_screen.dart';
 import 'workspace_screen.dart';
 
@@ -14,8 +15,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
+  final _logger = LoggerService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _logger.logUI('LoginScreen', 'screen_opened');
+  }
 
   @override
   void dispose() {
@@ -25,12 +33,20 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    _logger.logUI('LoginScreen', 'login_button_pressed');
+
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _logger.logUI('LoginScreen', 'validation_failed',
+        data: {'reason': 'empty_fields'}
+      );
       _showError('Lütfen tüm alanları doldurun');
       return;
     }
 
     setState(() => _isLoading = true);
+    _logger.logUI('LoginScreen', 'login_started',
+      data: {'email': _emailController.text.trim()}
+    );
 
     try {
       await _authService.signInWithEmailAndPassword(
@@ -39,12 +55,16 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
+        _logger.logNavigation('LoginScreen', 'WorkspaceScreen');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
         );
       }
     } catch (e) {
       if (mounted) {
+        _logger.logUI('LoginScreen', 'login_error',
+          data: {'error': e.toString()}
+        );
         _showError(e.toString());
       }
     } finally {
@@ -147,6 +167,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(width: 16),
                 TextButton(
                   onPressed: () {
+                    _logger.logUI('LoginScreen', 'sign_up_link_pressed');
+                    _logger.logNavigation('LoginScreen', 'SignUpScreen');
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const SignUpScreen(),
@@ -447,6 +469,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         TextButton(
                           onPressed: () {
+                            _logger.logUI('LoginScreen', 'sign_up_link_pressed');
+                            _logger.logNavigation('LoginScreen', 'SignUpScreen');
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => const SignUpScreen(),

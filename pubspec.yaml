@@ -27,6 +27,14 @@ environment:
 # dependencies can be manually updated by changing the version numbers below to
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "images/heyBridgeAppIconTransparan.png"
+
+  adaptive_icon_background: "#0B1A2F"
+  adaptive_icon_foreground: "images/heyBridgeAppIconTransparan.png"
+
 dependencies:
   flutter:
     sdk: flutter
@@ -42,6 +50,10 @@ dependencies:
 
   # State Management
   provider: ^6.1.2
+
+  # Utils
+  path_provider: ^2.1.1
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
