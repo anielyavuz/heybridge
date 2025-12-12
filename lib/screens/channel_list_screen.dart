@@ -4,6 +4,7 @@ import '../services/channel_service.dart';
 import '../services/logger_service.dart';
 import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
+import 'chat_screen.dart';
 
 class ChannelListScreen extends StatefulWidget {
   final WorkspaceModel workspace;
@@ -381,11 +382,13 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           _logger.logUI('ChannelListScreen', 'channel_selected',
             data: {'channelId': channel.id, 'channelName': channel.name}
           );
-          // TODO: Navigate to chat screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Opening #${channel.name}...'),
-              duration: const Duration(seconds: 1),
+          _logger.logNavigation('ChannelListScreen', 'ChatScreen');
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                workspace: widget.workspace,
+                channel: channel,
+              ),
             ),
           );
         },
