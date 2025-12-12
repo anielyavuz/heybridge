@@ -4,6 +4,7 @@ import '../services/workspace_service.dart';
 import '../services/logger_service.dart';
 import '../models/workspace_model.dart';
 import 'login_screen.dart';
+import 'channel_list_screen.dart';
 
 class WorkspaceListScreen extends StatefulWidget {
   const WorkspaceListScreen({super.key});
@@ -179,11 +180,10 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
               _logger.logUI('WorkspaceListScreen', 'workspace_selected',
                 data: {'workspaceId': workspace.id, 'workspaceName': workspace.name}
               );
-              // TODO: Navigate to workspace channels screen
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Opening ${workspace.name}...'),
-                  duration: const Duration(seconds: 1),
+              _logger.logNavigation('WorkspaceListScreen', 'ChannelListScreen');
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ChannelListScreen(workspace: workspace),
                 ),
               );
             },

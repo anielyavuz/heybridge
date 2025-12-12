@@ -28,7 +28,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: const Color(0xFF1A1D21),
       body: SafeArea(
@@ -56,10 +55,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                     const Spacer(),
                     IconButton(
                       onPressed: () async {
-                        _logger.logUI('WorkspaceScreen', 'logout_button_pressed');
+                        _logger.logUI(
+                          'WorkspaceScreen',
+                          'logout_button_pressed',
+                        );
                         await _authService.signOut();
                         if (context.mounted) {
-                          _logger.logNavigation('WorkspaceScreen', 'LoginScreen');
+                          _logger.logNavigation(
+                            'WorkspaceScreen',
+                            'LoginScreen',
+                          );
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
                               builder: (_) => const LoginScreen(),
@@ -67,10 +72,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                           );
                         }
                       },
-                      icon: const Icon(
-                        Icons.logout,
-                        color: Colors.white70,
-                      ),
+                      icon: const Icon(Icons.logout, color: Colors.white70),
                     ),
                   ],
                 ),
@@ -104,8 +106,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF4A9EFF)
-                                    .withValues(alpha: 0.5),
+                                color: const Color(
+                                  0xFF4A9EFF,
+                                ).withValues(alpha: 0.5),
                                 blurRadius: 6,
                                 spreadRadius: 1,
                               ),
@@ -144,7 +147,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   ),
                   child: InkWell(
                     onTap: () {
-                      _logger.logUI('WorkspaceScreen', 'create_workspace_button_pressed');
+                      _logger.logUI(
+                        'WorkspaceScreen',
+                        'create_workspace_button_pressed',
+                      );
                       _showCreateWorkspaceDialog(context);
                     },
                     borderRadius: BorderRadius.circular(12),
@@ -207,7 +213,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   ),
                   child: InkWell(
                     onTap: () {
-                      _logger.logUI('WorkspaceScreen', 'join_workspace_button_pressed');
+                      _logger.logUI(
+                        'WorkspaceScreen',
+                        'join_workspace_button_pressed',
+                      );
                       _showJoinWorkspaceDialog(context);
                     },
                     borderRadius: BorderRadius.circular(12),
@@ -346,7 +355,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                           hasPassword = value ?? false;
                         });
                       },
-                      fillColor: WidgetStateProperty.all(const Color(0xFF4A9EFF)),
+                      fillColor: WidgetStateProperty.all(
+                        const Color(0xFF4A9EFF),
+                      ),
                     ),
                     const Text(
                       'Password protect this workspace',
@@ -379,31 +390,39 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                _logger.logUI('WorkspaceScreen', 'create_workspace_dialog_cancelled');
+                _logger.logUI(
+                  'WorkspaceScreen',
+                  'create_workspace_dialog_cancelled',
+                );
                 Navigator.of(context).pop();
               },
-              child: const Text('Cancel'),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
             ElevatedButton(
               onPressed: () => _handleCreateWorkspace(
                 context,
                 nameController.text,
-                descriptionController.text.isEmpty ? null : descriptionController.text,
+                descriptionController.text.isEmpty
+                    ? null
+                    : descriptionController.text,
                 hasPassword ? passwordController.text : null,
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4A9EFF),
               ),
               child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Create'),
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Create', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -428,8 +447,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
 
     setState(() => _isLoading = true);
-    _logger.logUI('WorkspaceScreen', 'create_workspace_confirmed',
-      data: {'workspaceName': name, 'hasPassword': password != null}
+    _logger.logUI(
+      'WorkspaceScreen',
+      'create_workspace_confirmed',
+      data: {'workspaceName': name, 'hasPassword': password != null},
     );
 
     try {
@@ -489,13 +510,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const WorkspaceListScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const WorkspaceListScreen(),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4A9EFF),
                 ),
-                child: const Text('Continue'),
+                child: const Text(
+                  'Continue',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -504,10 +530,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Hata: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -593,7 +616,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                _logger.logUI('WorkspaceScreen', 'join_workspace_dialog_cancelled');
+                _logger.logUI(
+                  'WorkspaceScreen',
+                  'join_workspace_dialog_cancelled',
+                );
                 Navigator.of(context).pop();
               },
               child: const Text('Cancel'),
@@ -602,21 +628,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               onPressed: () => _handleJoinWorkspace(
                 context,
                 codeController.text,
-                passwordController.text.isEmpty ? null : passwordController.text,
+                passwordController.text.isEmpty
+                    ? null
+                    : passwordController.text,
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4A9EFF),
               ),
               child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Join'),
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Join'),
             ),
           ],
         ),
@@ -640,8 +668,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
 
     setState(() => _isLoading = true);
-    _logger.logUI('WorkspaceScreen', 'join_workspace_confirmed',
-      data: {'inviteCode': inviteCode}
+    _logger.logUI(
+      'WorkspaceScreen',
+      'join_workspace_confirmed',
+      data: {'inviteCode': inviteCode},
     );
 
     try {
@@ -680,10 +710,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Hata: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
