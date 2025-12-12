@@ -49,11 +49,14 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   Widget _buildMobileLayout(String? userId) {
     return SafeArea(
       child: Container(
-        color: const Color(0xFF2D3748),
+        color: const Color(0xFF3F0E40), // Slack purple
         child: Column(
           children: [
             // Workspace Header
             _buildWorkspaceHeader(),
+
+            // Jump to search
+            _buildJumpToSearch(),
 
             // Channels List
             Expanded(
@@ -84,17 +87,13 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       return _buildEmptyChannelList();
                     }
 
-                    // Auto-select first channel (general) on mobile
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (channels.isNotEmpty && !_isLoading) {
-                        // TODO: Navigate to chat screen with first channel
-                      }
-                    });
-
-                    return _buildChannelList(channels);
+                    return _buildSlackStyleChannelList(channels);
                   },
                 ),
             ),
+
+            // Bottom Navigation
+            _buildBottomNavigation(),
           ],
         ),
       ),
@@ -107,10 +106,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         // Left Sidebar - Channel List
         Container(
           width: 260,
-          decoration: const BoxDecoration(
-            color: Color(0xFF2D3748),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3F0E40), // Slack purple
             border: Border(
-              right: BorderSide(color: Color(0xFF1A1D21), width: 1),
+              right: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1),
             ),
           ),
           child: Column(
@@ -147,7 +146,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                           return _buildEmptyChannelList();
                         }
 
-                        return _buildChannelList(channels);
+                        return _buildSlackStyleChannelList(channels);
                       },
                     ),
               ),
@@ -260,42 +259,6 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  Widget _buildChannelList(List<ChannelModel> channels) {
-    final publicChannels = channels.where((c) => !c.isPrivate).toList();
-    final privateChannels = channels.where((c) => c.isPrivate).toList();
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        // Public Channels Section
-        if (publicChannels.isNotEmpty) ...[
-          _buildSectionHeader(
-            'Channels',
-            onAdd: () => _showCreateChannelDialog(isPrivate: false),
-          ),
-          ...publicChannels.map((channel) => _buildChannelItem(channel)),
-        ],
-
-        // Private Channels Section
-        if (privateChannels.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          _buildSectionHeader(
-            'Private Channels',
-            onAdd: () => _showCreateChannelDialog(isPrivate: true),
-          ),
-          ...privateChannels.map((channel) => _buildChannelItem(channel)),
-        ],
-
-        // Add Channel Button (if no channels yet)
-        if (channels.isEmpty) ...[
-          _buildSectionHeader(
-            'Channels',
-            onAdd: () => _showCreateChannelDialog(isPrivate: false),
-          ),
-        ],
-      ],
-    );
-  }
 
   Widget _buildEmptyChannelList() {
     return Center(
@@ -346,33 +309,6 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title, {VoidCallback? onAdd}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white60,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const Spacer(),
-          if (onAdd != null)
-            IconButton(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add, size: 18),
-              color: Colors.white60,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildChannelItem(ChannelModel channel) {
     return Material(
@@ -614,5 +550,216 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  // Jump to search bar
+  Widget _buildJumpToSearch() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1D), // Darker background for contrast
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.search, color: Colors.white70, size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Jump to...',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Slack-style channel list with sections
+  Widget _buildSlackStyleChannelList(List<ChannelModel> channels) {
+    final publicChannels = channels.where((c) => !c.isPrivate).toList();
+    final privateChannels = channels.where((c) => c.isPrivate).toList();
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        // Threads section
+        _buildMenuSection(
+          icon: Icons.forum_outlined,
+          label: 'Threads',
+          onTap: () {},
+        ),
+
+        // Drafts & Sent section
+        _buildMenuSection(
+          icon: Icons.send_outlined,
+          label: 'Drafts & Sent',
+          onTap: () {},
+        ),
+
+        // Mentions & Reactions section
+        _buildMenuSection(
+          icon: Icons.alternate_email,
+          label: 'Mentions & Reactions',
+          onTap: () {},
+        ),
+
+        const SizedBox(height: 16),
+
+        // STARRED section
+        if (publicChannels.isNotEmpty) ...[
+          _buildSectionHeader('STARRED', Icons.expand_more),
+          // TODO: Add starred channels
+        ],
+
+        const SizedBox(height: 16),
+
+        // CHANNELS section
+        _buildSectionHeader('CHANNELS', Icons.expand_more),
+        ...publicChannels.map((channel) => _buildChannelItem(channel)),
+        _buildAddChannelButton(),
+
+        const SizedBox(height: 16),
+
+        // DIRECT MESSAGES section
+        _buildSectionHeader('DIRECT MESSAGES', Icons.expand_more),
+        // TODO: Add DM list
+      ],
+    );
+  }
+
+  Widget _buildMenuSection({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white70, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white60, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white60,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddChannelButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showCreateChannelDialog(isPrivate: false),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.add, color: Colors.white60, size: 18),
+              const SizedBox(width: 12),
+              Text(
+                'Add channel',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Bottom navigation bar
+  Widget _buildBottomNavigation() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF350D36), // Darker purple for nav
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(Icons.home, 'Home', isActive: true),
+            _buildNavItem(Icons.chat_bubble_outline, 'DMs', isActive: false),
+            _buildNavItem(Icons.alternate_email, 'Mentions', isActive: false),
+            _buildNavItem(Icons.person_outline, 'You', isActive: false),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(IconData icon, String label, {required bool isActive}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {},
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isActive ? Colors.white : Colors.white60,
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.white : Colors.white60,
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
