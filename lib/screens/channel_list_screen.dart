@@ -34,99 +34,162 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   @override
   Widget build(BuildContext context) {
     final userId = _authService.currentUser?.uid;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1D21),
-      body: Row(
-        children: [
-          // Left Sidebar - Channel List
-          Container(
-            width: 260,
-            decoration: const BoxDecoration(
-              color: Color(0xFF2D3748),
-              border: Border(
-                right: BorderSide(color: Color(0xFF1A1D21), width: 1),
-              ),
-            ),
-            child: Column(
-              children: [
-                // Workspace Header
-                _buildWorkspaceHeader(),
+      body: isMobile
+        ? _buildMobileLayout(userId)
+        : _buildDesktopLayout(userId),
+    );
+  }
 
-                // Channels List
-                Expanded(
-                  child: userId == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : StreamBuilder<List<ChannelModel>>(
-                        stream: _channelService.getWorkspaceChannelsStream(
-                          workspaceId: widget.workspace.id,
-                          userId: userId,
+  Widget _buildMobileLayout(String? userId) {
+    return SafeArea(
+      child: Container(
+        color: const Color(0xFF2D3748),
+        child: Column(
+          children: [
+            // Workspace Header
+            _buildWorkspaceHeader(),
+
+            // Channels List
+            Expanded(
+              child: userId == null
+                ? const Center(child: CircularProgressIndicator())
+                : StreamBuilder<List<ChannelModel>>(
+                  stream: _channelService.getWorkspaceChannelsStream(
+                    workspaceId: widget.workspace.id,
+                    userId: userId,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Hata: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.red),
                         ),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
+                      );
+                    }
 
-                          if (snapshot.hasError) {
-                            return Center(
-                              child: Text(
-                                'Hata: ${snapshot.error}',
-                                style: const TextStyle(color: Colors.red),
-                              ),
-                            );
-                          }
+                    final channels = snapshot.data ?? [];
 
-                          final channels = snapshot.data ?? [];
+                    if (channels.isEmpty) {
+                      return _buildEmptyChannelList();
+                    }
 
-                          if (channels.isEmpty) {
-                            return _buildEmptyChannelList();
-                          }
+                    // Auto-select first channel (general) on mobile
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (channels.isNotEmpty && !_isLoading) {
+                        // TODO: Navigate to chat screen with first channel
+                      }
+                    });
 
-                          return _buildChannelList(channels);
-                        },
-                      ),
+                    return _buildChannelList(channels);
+                  },
                 ),
-              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(String? userId) {
+    return Row(
+      children: [
+        // Left Sidebar - Channel List
+        Container(
+          width: 260,
+          decoration: const BoxDecoration(
+            color: Color(0xFF2D3748),
+            border: Border(
+              right: BorderSide(color: Color(0xFF1A1D21), width: 1),
             ),
           ),
+          child: Column(
+            children: [
+              // Workspace Header
+              _buildWorkspaceHeader(),
 
-          // Main Content Area
-          Expanded(
-            child: Container(
-              color: const Color(0xFF1A1D21),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      size: 80,
-                      color: Colors.white.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Select a channel to start messaging',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
+              // Channels List
+              Expanded(
+                child: userId == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : StreamBuilder<List<ChannelModel>>(
+                      stream: _channelService.getWorkspaceChannelsStream(
+                        workspaceId: widget.workspace.id,
+                        userId: userId,
                       ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text(
+                              'Hata: ${snapshot.error}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          );
+                        }
+
+                        final channels = snapshot.data ?? [];
+
+                        if (channels.isEmpty) {
+                          return _buildEmptyChannelList();
+                        }
+
+                        return _buildChannelList(channels);
+                      },
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Choose a channel from the sidebar',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 14,
-                      ),
+              ),
+            ],
+          ),
+        ),
+
+        // Main Content Area
+        Expanded(
+          child: Container(
+            color: const Color(0xFF1A1D21),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 80,
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Select a channel to start messaging',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Choose a channel from the sidebar',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
