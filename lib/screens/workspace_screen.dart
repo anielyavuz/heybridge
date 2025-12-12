@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/workspace_service.dart';
+import '../services/firestore_service.dart';
 import '../services/logger_service.dart';
 import 'login_screen.dart';
+import 'workspace_list_screen.dart';
 
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({super.key});
@@ -12,7 +15,10 @@ class WorkspaceScreen extends StatefulWidget {
 
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
   final _authService = AuthService();
+  final _workspaceService = WorkspaceService();
+  final _firestoreService = FirestoreService();
   final _logger = LoggerService();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -270,125 +276,420 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   void _showCreateWorkspaceDialog(BuildContext context) {
     final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final passwordController = TextEditingController();
+    bool hasPassword = false;
 
     _logger.logUI('WorkspaceScreen', 'create_workspace_dialog_opened');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D3748),
-        title: const Text(
-          'Create a Workspace',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter a name for your workspace',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Workspace name',
-                hintStyle: const TextStyle(color: Colors.white38),
-                filled: true,
-                fillColor: const Color(0xFF1A1D21),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF2D3748),
+          title: const Text(
+            'Create a Workspace',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Workspace Name',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. My Team Workspace',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1D21),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Description (Optional)',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: descriptionController,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    hintText: 'What is this workspace about?',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1D21),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: hasPassword,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          hasPassword = value ?? false;
+                        });
+                      },
+                      fillColor: WidgetStateProperty.all(const Color(0xFF4A9EFF)),
+                    ),
+                    const Text(
+                      'Password protect this workspace',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+                if (hasPassword) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: passwordController,
+                    style: const TextStyle(color: Colors.white),
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      hintText: 'Enter password',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      prefixIcon: const Icon(Icons.lock, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1D21),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _logger.logUI('WorkspaceScreen', 'create_workspace_dialog_cancelled');
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => _handleCreateWorkspace(
+                context,
+                nameController.text,
+                descriptionController.text.isEmpty ? null : descriptionController.text,
+                hasPassword ? passwordController.text : null,
               ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A9EFF),
+              ),
+              child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Create'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _logger.logUI('WorkspaceScreen', 'create_workspace_dialog_cancelled');
-              Navigator.of(context).pop();
-            },
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _logger.logUI('WorkspaceScreen', 'create_workspace_confirmed',
-                data: {'workspaceName': nameController.text}
-              );
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A9EFF),
-            ),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
   }
 
+  Future<void> _handleCreateWorkspace(
+    BuildContext context,
+    String name,
+    String? description,
+    String? password,
+  ) async {
+    if (name.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Workspace adı boş olamaz'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    _logger.logUI('WorkspaceScreen', 'create_workspace_confirmed',
+      data: {'workspaceName': name, 'hasPassword': password != null}
+    );
+
+    try {
+      final userId = _authService.currentUser?.uid;
+      if (userId == null) throw Exception('Kullanıcı oturumu bulunamadı');
+
+      final workspace = await _workspaceService.createWorkspace(
+        name: name,
+        ownerId: userId,
+        description: description,
+        password: password,
+      );
+
+      // Add workspace ID to user's workspaceIds
+      await _firestoreService.addUserToWorkspace(userId, workspace.id);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close dialog
+
+        // Show success with invite code
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF2D3748),
+            title: const Text(
+              'Workspace Created!',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Share this invite code with your team:',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1D21),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    workspace.inviteCode ?? '',
+                    style: const TextStyle(
+                      color: Color(0xFF4A9EFF),
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const WorkspaceListScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A9EFF),
+                ),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   void _showJoinWorkspaceDialog(BuildContext context) {
     final codeController = TextEditingController();
+    final passwordController = TextEditingController();
+    bool needsPassword = false;
 
     _logger.logUI('WorkspaceScreen', 'join_workspace_dialog_opened');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D3748),
-        title: const Text(
-          'Join a Workspace',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter an invite code or workspace URL',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Invite code or URL',
-                hintStyle: const TextStyle(color: Colors.white38),
-                filled: true,
-                fillColor: const Color(0xFF1A1D21),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF2D3748),
+          title: const Text(
+            'Join a Workspace',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Invite Code',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: codeController,
+                  style: const TextStyle(color: Colors.white),
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    hintText: 'XXXXXX',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    prefixIcon: const Icon(Icons.tag, color: Colors.white60),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1D21),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    // Auto-check if this workspace needs password
+                    // In a real app, you might want to check this with the server
+                  },
+                ),
+                if (needsPassword) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Password',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: passwordController,
+                    style: const TextStyle(color: Colors.white),
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      hintText: 'Enter workspace password',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      prefixIcon: const Icon(Icons.lock, color: Colors.white60),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1D21),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _logger.logUI('WorkspaceScreen', 'join_workspace_dialog_cancelled');
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => _handleJoinWorkspace(
+                context,
+                codeController.text,
+                passwordController.text.isEmpty ? null : passwordController.text,
               ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A9EFF),
+              ),
+              child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Join'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _logger.logUI('WorkspaceScreen', 'join_workspace_dialog_cancelled');
-              Navigator.of(context).pop();
-            },
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _logger.logUI('WorkspaceScreen', 'join_workspace_confirmed',
-                data: {'inviteCode': codeController.text}
-              );
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A9EFF),
-            ),
-            child: const Text('Join'),
-          ),
-        ],
       ),
     );
+  }
+
+  Future<void> _handleJoinWorkspace(
+    BuildContext context,
+    String inviteCode,
+    String? password,
+  ) async {
+    if (inviteCode.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Davet kodu boş olamaz'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    _logger.logUI('WorkspaceScreen', 'join_workspace_confirmed',
+      data: {'inviteCode': inviteCode}
+    );
+
+    try {
+      final userId = _authService.currentUser?.uid;
+      if (userId == null) throw Exception('Kullanıcı oturumu bulunamadı');
+
+      final workspace = await _workspaceService.joinWorkspace(
+        inviteCode: inviteCode.toUpperCase().trim(),
+        userId: userId,
+        password: password,
+      );
+
+      if (workspace != null) {
+        // Add workspace ID to user's workspaceIds
+        await _firestoreService.addUserToWorkspace(userId, workspace.id);
+
+        if (mounted) {
+          Navigator.of(context).pop(); // Close dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${workspace.name} workspace\'ine katıldınız!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to workspace list
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const WorkspaceListScreen()),
+              );
+            }
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }
