@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/workspace_service.dart';
 import '../services/firestore_service.dart';
+import '../services/presence_service.dart';
 import '../services/logger_service.dart';
 import 'login_screen.dart';
 import 'workspace_list_screen.dart';
@@ -17,6 +18,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   final _authService = AuthService();
   final _workspaceService = WorkspaceService();
   final _firestoreService = FirestoreService();
+  final _presenceService = PresenceService();
   final _logger = LoggerService();
   bool _isLoading = false;
 
@@ -59,6 +61,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                           'WorkspaceScreen',
                           'logout_button_pressed',
                         );
+                        // Set offline before signing out
+                        await _presenceService.goOffline();
                         await _authService.signOut();
                         if (context.mounted) {
                           _logger.logNavigation(

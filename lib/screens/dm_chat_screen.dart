@@ -42,13 +42,15 @@ class _DMChatScreenState extends State<DMChatScreen> {
   MessageModel? _replyingTo;
   MessageModel? _editingMessage;
   late final Stream<List<MessageModel>> _messagesStream;
+  Stream<UserModel?>? _otherUserStream;
   UserModel? _otherUserData;
+  String? _otherUserId;
 
   @override
   void initState() {
     super.initState();
     _otherUserData = widget.otherUser;
-    _loadOtherUser();
+    _initOtherUserStream();
 
     _logger.logUI('DMChatScreen', 'screen_opened',
       data: {
@@ -89,18 +91,32 @@ class _DMChatScreenState extends State<DMChatScreen> {
     });
   }
 
-  Future<void> _loadOtherUser() async {
-    if (_otherUserData != null) return;
-
+  void _initOtherUserStream() {
     final currentUserId = _authService.currentUser?.uid;
-    final otherUserId = widget.dm.participantIds.firstWhere(
+    _otherUserId = widget.dm.participantIds.firstWhere(
       (id) => id != currentUserId,
       orElse: () => widget.dm.participantIds.first,
     );
 
-    final user = await _firestoreService.getUser(otherUserId);
-    if (mounted) {
-      setState(() => _otherUserData = user);
+    // Set up real-time listener for other user's data (including online status)
+    _otherUserStream = _firestoreService.getUserStream(_otherUserId!);
+  }
+
+  // Format last seen time as relative string
+  String _formatLastSeen(DateTime lastSeen) {
+    final now = DateTime.now();
+    final difference = now.difference(lastSeen);
+
+    if (difference.inMinutes < 1) {
+      return 'son görülme: şimdi';
+    } else if (difference.inMinutes < 60) {
+      return 'son görülme: ${difference.inMinutes} dk önce';
+    } else if (difference.inHours < 24) {
+      return 'son görülme: ${difference.inHours} saat önce';
+    } else if (difference.inDays < 7) {
+      return 'son görülme: ${difference.inDays} gün önce';
+    } else {
+      return 'son görülme: ${DateFormat('dd MMM').format(lastSeen)}';
     }
   }
 
@@ -312,50 +328,92 @@ class _DMChatScreenState extends State<DMChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final otherUserName = _otherUserData?.displayName ?? 'User';
-
     return Scaffold(
       backgroundColor: const Color(0xFF1A1D21),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1D21),
         elevation: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF4A9EFF),
-              backgroundImage: _otherUserData?.photoURL != null
-                  ? NetworkImage(_otherUserData!.photoURL!)
-                  : null,
-              child: _otherUserData?.photoURL == null
-                  ? Text(
-                      otherUserName[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    otherUserName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+        title: StreamBuilder<UserModel?>(
+          stream: _otherUserStream,
+          initialData: _otherUserData,
+          builder: (context, snapshot) {
+            final user = snapshot.data ?? _otherUserData;
+            final otherUserName = user?.displayName ?? 'User';
+
+            return Row(
+              children: [
+                // Online indicator on avatar
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: const Color(0xFF4A9EFF),
+                      backgroundImage: user?.photoURL != null
+                          ? NetworkImage(user!.photoURL!)
+                          : null,
+                      child: user?.photoURL == null
+                          ? Text(
+                              otherUserName[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
                     ),
+                    // Online indicator dot
+                    if (user?.isOnline == true)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF22C55E), // Green for online
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF1A1D21),
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        otherUserName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      // Online status text
+                      if (user != null)
+                        Text(
+                          user.isOnline
+                              ? 'Çevrimiçi'
+                              : _formatLastSeen(user.lastSeen),
+                          style: TextStyle(
+                            color: user.isOnline
+                                ? const Color(0xFF22C55E)
+                                : Colors.white54,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
                   ),
-                  // Online status will be added in Phase 7
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ),
       body: Column(
@@ -383,7 +441,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
                 final messages = snapshot.data ?? [];
 
                 if (messages.isEmpty) {
-                  return _buildEmptyState(otherUserName);
+                  return _buildEmptyState();
                 }
 
                 return ListView.builder(
@@ -415,47 +473,56 @@ class _DMChatScreenState extends State<DMChatScreen> {
     );
   }
 
-  Widget _buildEmptyState(String otherUserName) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 48,
-            backgroundColor: const Color(0xFF4A9EFF),
-            backgroundImage: _otherUserData?.photoURL != null
-                ? NetworkImage(_otherUserData!.photoURL!)
-                : null,
-            child: _otherUserData?.photoURL == null
-                ? Text(
-                    otherUserName[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
+  Widget _buildEmptyState() {
+    return StreamBuilder<UserModel?>(
+      stream: _otherUserStream,
+      initialData: _otherUserData,
+      builder: (context, snapshot) {
+        final user = snapshot.data ?? _otherUserData;
+        final otherUserName = user?.displayName ?? 'User';
+
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: 48,
+                backgroundColor: const Color(0xFF4A9EFF),
+                backgroundImage: user?.photoURL != null
+                    ? NetworkImage(user!.photoURL!)
+                    : null,
+                child: user?.photoURL == null
+                    ? Text(
+                        otherUserName[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                otherUserName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Bu konuşmanın başlangıcı',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            otherUserName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'This is the beginning of your conversation',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

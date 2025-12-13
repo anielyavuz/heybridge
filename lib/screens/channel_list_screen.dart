@@ -6,6 +6,7 @@ import '../services/channel_service.dart';
 import '../services/logger_service.dart';
 import '../services/workspace_service.dart';
 import '../services/preferences_service.dart';
+import '../services/presence_service.dart';
 import '../services/dm_service.dart';
 import '../services/firestore_service.dart';
 import '../models/workspace_model.dart';
@@ -32,6 +33,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   final _channelService = ChannelService();
   final _workspaceService = WorkspaceService();
   final _preferencesService = PreferencesService();
+  final _presenceService = PresenceService();
   final _dmService = DMService();
   final _firestoreService = FirestoreService();
   final _logger = LoggerService();
@@ -1691,6 +1693,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   ),
                 ),
                 onTap: () async {
+                  // Set offline before signing out
+                  await _presenceService.goOffline();
                   await _authService.signOut();
                   if (mounted) {
                     Navigator.of(context).pushAndRemoveUntil(

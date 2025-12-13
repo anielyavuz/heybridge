@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/workspace_service.dart';
+import '../services/presence_service.dart';
 import '../services/logger_service.dart';
 import 'sign_up_screen.dart';
 import 'workspace_screen.dart';
@@ -18,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _authService = AuthService();
   final _workspaceService = WorkspaceService();
+  final _presenceService = PresenceService();
   final _logger = LoggerService();
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -58,6 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
+        // Start presence tracking (online status)
+        await _presenceService.goOnline();
+
         // Check if user has any workspaces
         final userId = _authService.currentUser?.uid;
         if (userId != null) {

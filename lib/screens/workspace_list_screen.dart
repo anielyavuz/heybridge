@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/workspace_service.dart';
+import '../services/presence_service.dart';
 import '../services/logger_service.dart';
 import '../services/preferences_service.dart';
 import '../models/workspace_model.dart';
@@ -17,6 +18,7 @@ class WorkspaceListScreen extends StatefulWidget {
 class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
   final _authService = AuthService();
   final _workspaceService = WorkspaceService();
+  final _presenceService = PresenceService();
   final _logger = LoggerService();
   final _preferencesService = PreferencesService();
   List<WorkspaceModel> _workspaces = [];
@@ -76,6 +78,8 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
           IconButton(
             onPressed: () async {
               _logger.logUI('WorkspaceListScreen', 'logout_button_pressed');
+              // Set offline before signing out
+              await _presenceService.goOffline();
               await _authService.signOut();
               if (context.mounted) {
                 _logger.logNavigation('WorkspaceListScreen', 'LoginScreen');

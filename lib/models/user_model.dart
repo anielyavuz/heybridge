@@ -5,6 +5,7 @@ class UserModel {
   final String? photoURL;
   final DateTime createdAt;
   final DateTime lastSeen;
+  final bool isOnline;
   final List<String> workspaceIds;
 
   UserModel({
@@ -14,6 +15,7 @@ class UserModel {
     this.photoURL,
     required this.createdAt,
     required this.lastSeen,
+    this.isOnline = false,
     this.workspaceIds = const [],
   });
 
@@ -25,6 +27,7 @@ class UserModel {
       'photoURL': photoURL,
       'createdAt': createdAt.toIso8601String(),
       'lastSeen': lastSeen.toIso8601String(),
+      'isOnline': isOnline,
       'workspaceIds': workspaceIds,
     };
   }
@@ -37,6 +40,7 @@ class UserModel {
       photoURL: map['photoURL'],
       createdAt: DateTime.parse(map['createdAt']),
       lastSeen: DateTime.parse(map['lastSeen']),
+      isOnline: map['isOnline'] ?? false,
       workspaceIds: List<String>.from(map['workspaceIds'] ?? []),
     );
   }
@@ -48,6 +52,7 @@ class UserModel {
     String? photoURL,
     DateTime? createdAt,
     DateTime? lastSeen,
+    bool? isOnline,
     List<String>? workspaceIds,
   }) {
     return UserModel(
@@ -57,6 +62,7 @@ class UserModel {
       photoURL: photoURL ?? this.photoURL,
       createdAt: createdAt ?? this.createdAt,
       lastSeen: lastSeen ?? this.lastSeen,
+      isOnline: isOnline ?? this.isOnline,
       workspaceIds: workspaceIds ?? this.workspaceIds,
     );
   }

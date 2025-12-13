@@ -121,6 +121,25 @@ class FirestoreService {
     }
   }
 
+  // Update user presence (online status and last seen)
+  Future<void> updatePresence(String uid, bool isOnline) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'isOnline': isOnline,
+        'lastSeen': DateTime.now().toIso8601String(),
+      });
+
+      _logger.logFirestore('update_presence', success: true, collection: 'users');
+    } catch (e) {
+      _logger.logFirestore('update_presence', success: false, collection: 'users', error: e.toString());
+      _logger.log('Failed to update presence',
+        level: LogLevel.error,
+        category: 'FIRESTORE',
+        data: {'uid': uid, 'error': e.toString()}
+      );
+    }
+  }
+
   Stream<UserModel?> getUserStream(String uid) {
     _logger.log('Starting user stream',
       category: 'FIRESTORE',

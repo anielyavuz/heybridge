@@ -13,10 +13,12 @@ service cloud.firestore {
     }
 
     // Users collection
+    // Contains user profile, presence (isOnline, lastSeen), and workspace memberships
     match /users/{userId} {
-      // Users can read their own data and other authenticated users (for workspace members, DMs, etc.)
+      // Users can read any user's data (for workspace members, DMs, presence status, etc.)
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId;
+      // Users can only update their own profile (including presence updates)
       allow update: if isSignedIn() && request.auth.uid == userId;
       allow delete: if false; // Don't allow user deletion
     }
@@ -78,9 +80,10 @@ service cloud.firestore {
                            request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.memberIds &&
                            request.auth.uid == request.resource.data.senderId;
 
-          // Only message sender can update their message
+          // Message sender can update their message (edit text)
+          // Any workspace member can update reactions, pin status, or star status
           allow update: if isSignedIn() &&
-                           request.auth.uid == resource.data.senderId;
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.memberIds;
 
           // Only message sender or workspace owner can delete
           allow delete: if isSignedIn() &&
@@ -119,9 +122,9 @@ service cloud.firestore {
                            request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds &&
                            request.auth.uid == request.resource.data.senderId;
 
-          // Only message sender can update their message
+          // Participants can update messages (for reactions, read status, etc.)
           allow update: if isSignedIn() &&
-                           request.auth.uid == resource.data.senderId;
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
 
           // Only message sender can delete their message
           allow delete: if isSignedIn() &&
