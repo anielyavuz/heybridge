@@ -90,6 +90,40 @@ class AuthService {
     );
   }
 
+  // Re-authenticate user (required for sensitive operations like email/password change)
+  Future<UserCredential?> reauthenticate(String email, String password) async {
+    try {
+      _logger.log('Attempting to reauthenticate',
+        category: 'AUTH',
+        data: {'email': email}
+      );
+
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+
+      final result = await _auth.currentUser?.reauthenticateWithCredential(credential);
+
+      _logger.logAuth('reauthenticate', success: true);
+      _logger.log('User reauthenticated successfully',
+        level: LogLevel.success,
+        category: 'AUTH',
+        data: {'email': email}
+      );
+
+      return result;
+    } on FirebaseAuthException catch (e) {
+      _logger.logAuth('reauthenticate', success: false, error: e.code);
+      _logger.log('Reauthentication failed',
+        level: LogLevel.error,
+        category: 'AUTH',
+        data: {'email': email, 'errorCode': e.code, 'errorMessage': e.message}
+      );
+      throw _handleAuthException(e);
+    }
+  }
+
   String _handleAuthException(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

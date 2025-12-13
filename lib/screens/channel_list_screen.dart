@@ -1911,9 +1911,21 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     child: Column(
                       children: [
                         _buildProfileMenuItem(
-                          icon: Icons.person_outline,
-                          label: 'Profili Düzenle',
-                          onTap: () => _showEditProfileDialog(userData),
+                          icon: Icons.edit,
+                          label: 'Kullanıcı Adını Değiştir',
+                          onTap: () => _showChangeUsernameDialog(userData),
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 1),
+                        _buildProfileMenuItem(
+                          icon: Icons.email_outlined,
+                          label: 'E-posta Değiştir',
+                          onTap: () => _showChangeEmailDialog(userData),
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 1),
+                        _buildProfileMenuItem(
+                          icon: Icons.lock_outline,
+                          label: 'Şifre Değiştir',
+                          onTap: () => _showChangePasswordDialog(),
                         ),
                         const Divider(color: Color(0xFF1A1D21), height: 1),
                         _buildProfileMenuItem(
@@ -2046,7 +2058,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  void _showEditProfileDialog(UserModel? userData) {
+  void _showChangeUsernameDialog(UserModel? userData) {
     final nameController = TextEditingController(text: userData?.displayName ?? '');
 
     showDialog(
@@ -2058,14 +2070,16 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         ),
         title: const Row(
           children: [
-            Icon(Icons.person_outline, color: Color(0xFF4A9EFF)),
+            Icon(Icons.edit, color: Color(0xFF4A9EFF)),
             SizedBox(width: 12),
-            Text(
-              'Profili Düzenle',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                'Kullanıcı Adını Değiştir',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -2075,7 +2089,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Görünen Ad',
+              'Yeni Kullanıcı Adı',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 14,
@@ -2085,8 +2099,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             TextField(
               controller: nameController,
               style: const TextStyle(color: Colors.white),
+              autofocus: true,
               decoration: InputDecoration(
-                hintText: 'Adınızı girin',
+                hintText: 'Kullanıcı adınızı girin',
                 hintStyle: const TextStyle(color: Colors.white38),
                 filled: true,
                 fillColor: const Color(0xFF1A1D21),
@@ -2120,7 +2135,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(this.context).showSnackBar(
                       const SnackBar(
-                        content: Text('Profil güncellendi!'),
+                        content: Text('Kullanıcı adı güncellendi!'),
                         backgroundColor: Color(0xFF22C55E),
                       ),
                     );
@@ -2142,6 +2157,364 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             ),
             child: const Text(
               'Kaydet',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangeEmailDialog(UserModel? userData) {
+    final emailController = TextEditingController(text: userData?.email ?? '');
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D3748),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.email_outlined, color: Color(0xFF4A9EFF)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'E-posta Değiştir',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Yeni E-posta Adresi',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: emailController,
+              style: const TextStyle(color: Colors.white),
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                hintText: 'yeni@email.com',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: const Color(0xFF1A1D21),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Mevcut Şifre (doğrulama için)',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: passwordController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: true,
+              decoration: InputDecoration(
+                hintText: '••••••••',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: const Color(0xFF1A1D21),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'İptal',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newEmail = emailController.text.trim();
+              final password = passwordController.text;
+
+              if (newEmail.isEmpty || password.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Lütfen tüm alanları doldurun'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                // Re-authenticate user first
+                final user = _authService.currentUser;
+                if (user != null && user.email != null) {
+                  final credential = await _authService.reauthenticate(
+                    user.email!,
+                    password,
+                  );
+
+                  if (credential != null) {
+                    // Update email in Firebase Auth
+                    await user.verifyBeforeUpdateEmail(newEmail);
+
+                    // Update email in Firestore
+                    await _firestoreService.firestore
+                        .collection('users')
+                        .doc(user.uid)
+                        .update({'email': newEmail});
+
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Doğrulama e-postası gönderildi. Lütfen yeni e-postanızı doğrulayın.'),
+                          backgroundColor: Color(0xFF22C55E),
+                        ),
+                      );
+                    }
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Hata: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A9EFF),
+            ),
+            child: const Text(
+              'Değiştir',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog() {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D3748),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_outline, color: Color(0xFF4A9EFF)),
+            SizedBox(width: 12),
+            Text(
+              'Şifre Değiştir',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Mevcut Şifre',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: currentPasswordController,
+                style: const TextStyle(color: Colors.white),
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: '••••••••',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1D21),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Yeni Şifre',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: newPasswordController,
+                style: const TextStyle(color: Colors.white),
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: 'En az 6 karakter',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1D21),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Yeni Şifre (Tekrar)',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmPasswordController,
+                style: const TextStyle(color: Colors.white),
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: 'Şifreyi tekrar girin',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: const Color(0xFF1A1D21),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'İptal',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final currentPassword = currentPasswordController.text;
+              final newPassword = newPasswordController.text;
+              final confirmPassword = confirmPasswordController.text;
+
+              if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Lütfen tüm alanları doldurun'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              if (newPassword.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Şifre en az 6 karakter olmalıdır'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              if (newPassword != confirmPassword) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Şifreler eşleşmiyor'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final user = _authService.currentUser;
+                if (user != null && user.email != null) {
+                  // Re-authenticate user first
+                  final credential = await _authService.reauthenticate(
+                    user.email!,
+                    currentPassword,
+                  );
+
+                  if (credential != null) {
+                    // Update password
+                    await user.updatePassword(newPassword);
+
+                    if (mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Şifre başarıyla güncellendi!'),
+                          backgroundColor: Color(0xFF22C55E),
+                        ),
+                      );
+                    }
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  String errorMessage = 'Bir hata oluştu';
+                  if (e.toString().contains('wrong-password')) {
+                    errorMessage = 'Mevcut şifre yanlış';
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(errorMessage),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A9EFF),
+            ),
+            child: const Text(
+              'Değiştir',
               style: TextStyle(color: Colors.white),
             ),
           ),
