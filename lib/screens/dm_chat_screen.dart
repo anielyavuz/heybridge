@@ -38,7 +38,6 @@ class _DMChatScreenState extends State<DMChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _messageFocusNode = FocusNode();
-  bool _isLoading = false;
   bool _showEmojiPicker = false;
   MessageModel? _replyingTo;
   MessageModel? _editingMessage;
@@ -118,8 +117,6 @@ class _DMChatScreenState extends State<DMChatScreen> {
 
     final userId = _authService.currentUser?.uid;
     if (userId == null) return;
-
-    setState(() => _isLoading = true);
 
     try {
       final messageText = _messageController.text.trim();
@@ -220,8 +217,6 @@ class _DMChatScreenState extends State<DMChatScreen> {
           ),
         );
       }
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -700,6 +695,11 @@ class _DMChatScreenState extends State<DMChatScreen> {
                               ),
                             ),
                           ],
+                          // Message status indicator (WhatsApp-style ticks) for own messages
+                          if (isOwnMessage) ...[
+                            const SizedBox(width: 4),
+                            _buildMessageStatusIcon(message.status),
+                          ],
                         ],
                       ),
                     ],
@@ -713,6 +713,36 @@ class _DMChatScreenState extends State<DMChatScreen> {
         ),
       ),
     );
+  }
+
+  // Build WhatsApp-style message status icon
+  Widget _buildMessageStatusIcon(MessageStatus status) {
+    switch (status) {
+      case MessageStatus.sending:
+        return Icon(
+          Icons.access_time,
+          size: 14,
+          color: Colors.white.withValues(alpha: 0.6),
+        );
+      case MessageStatus.sent:
+        return Icon(
+          Icons.check,
+          size: 14,
+          color: Colors.white.withValues(alpha: 0.8),
+        );
+      case MessageStatus.delivered:
+        return Icon(
+          Icons.done_all,
+          size: 14,
+          color: Colors.white.withValues(alpha: 0.8),
+        );
+      case MessageStatus.read:
+        return Icon(
+          Icons.done_all,
+          size: 14,
+          color: const Color(0xFF34B7F1), // WhatsApp blue tick color
+        );
+    }
   }
 
   void _showMessageOptions(MessageModel message) {
@@ -920,17 +950,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
                   },
                 ),
                 IconButton(
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFF4A9EFF),
-                          ),
-                        )
-                      : const Icon(Icons.send, color: Color(0xFF4A9EFF)),
-                  onPressed: _isLoading ? null : _sendMessage,
+                  icon: const Icon(Icons.send, color: Color(0xFF4A9EFF)),
+                  onPressed: _sendMessage,
                 ),
               ],
             ),

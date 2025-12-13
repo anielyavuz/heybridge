@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Message delivery status
+enum MessageStatus { sending, sent, delivered, read }
+
 class MessageModel {
   final String id;
   final String channelId;
@@ -18,6 +21,7 @@ class MessageModel {
   final String? pinnedBy;
   final DateTime? pinnedAt;
   final List<String>? starredBy; // list of userIds who starred this message
+  final MessageStatus status; // Message delivery status
 
   MessageModel({
     required this.id,
@@ -37,6 +41,7 @@ class MessageModel {
     this.pinnedBy,
     this.pinnedAt,
     this.starredBy,
+    this.status = MessageStatus.sent,
   });
 
   // Convert MessageModel to Map for Firestore
@@ -59,7 +64,23 @@ class MessageModel {
       'pinnedBy': pinnedBy,
       'pinnedAt': pinnedAt != null ? Timestamp.fromDate(pinnedAt!) : null,
       'starredBy': starredBy,
+      'status': status.name,
     };
+  }
+
+  // Helper to parse status from string
+  static MessageStatus _parseStatus(String? statusStr) {
+    switch (statusStr) {
+      case 'sending':
+        return MessageStatus.sending;
+      case 'delivered':
+        return MessageStatus.delivered;
+      case 'read':
+        return MessageStatus.read;
+      case 'sent':
+      default:
+        return MessageStatus.sent;
+    }
   }
 
   // Create MessageModel from Firestore document
@@ -99,6 +120,7 @@ class MessageModel {
       starredBy: map['starredBy'] != null
         ? List<String>.from(map['starredBy'])
         : null,
+      status: _parseStatus(map['status']),
     );
   }
 
@@ -121,6 +143,7 @@ class MessageModel {
     String? pinnedBy,
     DateTime? pinnedAt,
     List<String>? starredBy,
+    MessageStatus? status,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -140,6 +163,7 @@ class MessageModel {
       pinnedBy: pinnedBy ?? this.pinnedBy,
       pinnedAt: pinnedAt ?? this.pinnedAt,
       starredBy: starredBy ?? this.starredBy,
+      status: status ?? this.status,
     );
   }
 }
