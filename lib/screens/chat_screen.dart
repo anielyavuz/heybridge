@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -693,6 +694,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showMessageOptions(MessageModel message) {
+    final currentUserId = _authService.currentUser?.uid;
+    final isStarred = message.starredBy?.contains(currentUserId) ?? false;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF2D3748),
@@ -713,7 +717,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     _replyingTo = message;
                     _showEmojiPicker = false;
                   });
-                  // Focus on the input field and open keyboard
                   _messageFocusNode.requestFocus();
                 },
               ),
@@ -728,9 +731,146 @@ class _ChatScreenState extends State<ChatScreen> {
               ListTile(
                 leading: const Icon(Icons.copy, color: Colors.white70),
                 title: const Text('Copy Text', style: TextStyle(color: Colors.white)),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  // TODO: Copy to clipboard
+                  await Clipboard.setData(ClipboardData(text: message.text));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Message copied to clipboard'),
+                        backgroundColor: Color(0xFF4A9EFF),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                  _logger.logUI('ChatScreen', 'message_copied',
+                    data: {'messageId': message.id}
+                  );
+                },
+              ),
+              // Star/Unstar message
+              ListTile(
+                leading: Icon(
+                  isStarred ? Icons.star : Icons.star_border,
+                  color: isStarred ? Colors.amber : Colors.white70,
+                ),
+                title: Text(
+                  isStarred ? 'Remove from Saved' : 'Save Message',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (currentUserId == null) return;
+
+                  try {
+                    if (isStarred) {
+                      await _messageService.unstarMessage(
+                        workspaceId: widget.workspace.id,
+                        channelId: widget.channel.id,
+                        messageId: message.id,
+                        userId: currentUserId,
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Message removed from saved'),
+                            backgroundColor: Color(0xFF2D3748),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    } else {
+                      await _messageService.starMessage(
+                        workspaceId: widget.workspace.id,
+                        channelId: widget.channel.id,
+                        messageId: message.id,
+                        userId: currentUserId,
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Message saved'),
+                            backgroundColor: Color(0xFF4A9EFF),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                    _logger.logUI('ChatScreen', isStarred ? 'message_unstarred' : 'message_starred',
+                      data: {'messageId': message.id}
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to ${isStarred ? 'unsave' : 'save'} message: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              // Pin/Unpin message
+              ListTile(
+                leading: Icon(
+                  message.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  color: message.isPinned ? const Color(0xFF4A9EFF) : Colors.white70,
+                ),
+                title: Text(
+                  message.isPinned ? 'Unpin Message' : 'Pin Message',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (currentUserId == null) return;
+
+                  try {
+                    if (message.isPinned) {
+                      await _messageService.unpinMessage(
+                        workspaceId: widget.workspace.id,
+                        channelId: widget.channel.id,
+                        messageId: message.id,
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Message unpinned'),
+                            backgroundColor: Color(0xFF2D3748),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    } else {
+                      await _messageService.pinMessage(
+                        workspaceId: widget.workspace.id,
+                        channelId: widget.channel.id,
+                        messageId: message.id,
+                        userId: currentUserId,
+                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Message pinned'),
+                            backgroundColor: Color(0xFF4A9EFF),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                    _logger.logUI('ChatScreen', message.isPinned ? 'message_unpinned' : 'message_pinned',
+                      data: {'messageId': message.id}
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to ${message.isPinned ? 'unpin' : 'pin'} message: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
               ),
               if (message.senderId == _authService.currentUser?.uid) ...[
@@ -742,7 +882,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     setState(() {
                       _editingMessage = message;
                       _messageController.text = message.text;
-                      _replyingTo = null; // Clear reply when editing
+                      _replyingTo = null;
                     });
                   },
                 ),
@@ -752,7 +892,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   onTap: () async {
                     Navigator.pop(context);
 
-                    // Show confirmation dialog
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -1013,10 +1152,30 @@ class _ChatScreenState extends State<ChatScreen> {
 
                         const SizedBox(height: 4),
 
-                        // Timestamp and edited indicator
+                        // Timestamp, edited, pinned, and starred indicators
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // Pinned indicator
+                            if (message.isPinned) ...[
+                              Icon(
+                                Icons.push_pin,
+                                size: 12,
+                                color: isOwnMessage
+                                  ? Colors.white.withValues(alpha: 0.8)
+                                  : const Color(0xFF4A9EFF),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            // Starred indicator
+                            if (message.starredBy?.contains(currentUserId) ?? false) ...[
+                              Icon(
+                                Icons.star,
+                                size: 12,
+                                color: Colors.amber,
+                              ),
+                              const SizedBox(width: 4),
+                            ],
                             Text(
                               DateFormat('h:mm a').format(message.createdAt),
                               style: TextStyle(

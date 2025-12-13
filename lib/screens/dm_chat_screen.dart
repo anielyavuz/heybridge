@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -736,6 +737,26 @@ class _DMChatScreenState extends State<DMChatScreen> {
                     _showEmojiPicker = false;
                   });
                   _messageFocusNode.requestFocus();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy, color: Colors.white70),
+                title: const Text('Copy Text', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await Clipboard.setData(ClipboardData(text: message.text));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Message copied to clipboard'),
+                        backgroundColor: Color(0xFF4A9EFF),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                  _logger.logUI('DMChatScreen', 'message_copied',
+                    data: {'messageId': message.id}
+                  );
                 },
               ),
               if (message.senderId == _authService.currentUser?.uid) ...[

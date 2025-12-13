@@ -229,4 +229,125 @@ class MessageService {
       .map((doc) => MessageModel.fromMap(doc.data(), doc.id))
       .toList();
   }
+
+  // Pin a message
+  Future<void> pinMessage({
+    required String workspaceId,
+    required String channelId,
+    required String messageId,
+    required String userId,
+  }) async {
+    await _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .collection('messages')
+      .doc(messageId)
+      .update({
+        'isPinned': true,
+        'pinnedBy': userId,
+        'pinnedAt': Timestamp.now(),
+      });
+  }
+
+  // Unpin a message
+  Future<void> unpinMessage({
+    required String workspaceId,
+    required String channelId,
+    required String messageId,
+  }) async {
+    await _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .collection('messages')
+      .doc(messageId)
+      .update({
+        'isPinned': false,
+        'pinnedBy': null,
+        'pinnedAt': null,
+      });
+  }
+
+  // Get pinned messages for a channel
+  Stream<List<MessageModel>> getPinnedMessagesStream({
+    required String workspaceId,
+    required String channelId,
+  }) {
+    return _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .collection('messages')
+      .where('isPinned', isEqualTo: true)
+      .orderBy('pinnedAt', descending: true)
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs
+          .map((doc) => MessageModel.fromMap(doc.data(), doc.id))
+          .toList();
+      });
+  }
+
+  // Star a message (add user to starredBy list)
+  Future<void> starMessage({
+    required String workspaceId,
+    required String channelId,
+    required String messageId,
+    required String userId,
+  }) async {
+    await _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .collection('messages')
+      .doc(messageId)
+      .update({
+        'starredBy': FieldValue.arrayUnion([userId]),
+      });
+  }
+
+  // Unstar a message (remove user from starredBy list)
+  Future<void> unstarMessage({
+    required String workspaceId,
+    required String channelId,
+    required String messageId,
+    required String userId,
+  }) async {
+    await _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .collection('messages')
+      .doc(messageId)
+      .update({
+        'starredBy': FieldValue.arrayRemove([userId]),
+      });
+  }
+
+  // Get starred messages for a user in a workspace
+  Future<List<MessageModel>> getStarredMessages({
+    required String workspaceId,
+    required String channelId,
+    required String userId,
+  }) async {
+    final snapshot = await _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .collection('messages')
+      .where('starredBy', arrayContains: userId)
+      .orderBy('createdAt', descending: true)
+      .get();
+
+    return snapshot.docs
+      .map((doc) => MessageModel.fromMap(doc.data(), doc.id))
+      .toList();
+  }
 }

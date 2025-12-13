@@ -14,6 +14,10 @@ class MessageModel {
   final DateTime? updatedAt;
   final bool isEdited;
   final bool isDeleted;
+  final bool isPinned;
+  final String? pinnedBy;
+  final DateTime? pinnedAt;
+  final List<String>? starredBy; // list of userIds who starred this message
 
   MessageModel({
     required this.id,
@@ -29,6 +33,10 @@ class MessageModel {
     this.updatedAt,
     this.isEdited = false,
     this.isDeleted = false,
+    this.isPinned = false,
+    this.pinnedBy,
+    this.pinnedAt,
+    this.starredBy,
   });
 
   // Convert MessageModel to Map for Firestore
@@ -47,6 +55,10 @@ class MessageModel {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'isEdited': isEdited,
       'isDeleted': isDeleted,
+      'isPinned': isPinned,
+      'pinnedBy': pinnedBy,
+      'pinnedAt': pinnedAt != null ? Timestamp.fromDate(pinnedAt!) : null,
+      'starredBy': starredBy,
     };
   }
 
@@ -79,6 +91,14 @@ class MessageModel {
         : null,
       isEdited: map['isEdited'] ?? false,
       isDeleted: map['isDeleted'] ?? false,
+      isPinned: map['isPinned'] ?? false,
+      pinnedBy: map['pinnedBy'],
+      pinnedAt: map['pinnedAt'] != null
+        ? (map['pinnedAt'] as Timestamp).toDate()
+        : null,
+      starredBy: map['starredBy'] != null
+        ? List<String>.from(map['starredBy'])
+        : null,
     );
   }
 
@@ -97,6 +117,10 @@ class MessageModel {
     DateTime? updatedAt,
     bool? isEdited,
     bool? isDeleted,
+    bool? isPinned,
+    String? pinnedBy,
+    DateTime? pinnedAt,
+    List<String>? starredBy,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -112,6 +136,10 @@ class MessageModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isEdited: isEdited ?? this.isEdited,
       isDeleted: isDeleted ?? this.isDeleted,
+      isPinned: isPinned ?? this.isPinned,
+      pinnedBy: pinnedBy ?? this.pinnedBy,
+      pinnedAt: pinnedAt ?? this.pinnedAt,
+      starredBy: starredBy ?? this.starredBy,
     );
   }
 }

@@ -142,11 +142,11 @@ HeyBridge - Slack Clone Development Roadmap
    - ✅ Reaction toggle (click to add/remove reaction)
    - ✅ Visual feedback for own reactions (highlighted in blue)
    - ✅ Swipe-to-reply gesture (WhatsApp-style, 40% threshold with Reply button)
-   - [ ] Copy message text (deferred to Phase 6)
+   - ✅ Copy message text (clipboard copy with feedback)
    - [ ] Share message link (deferred to Phase 6)
-   - [ ] Pin important messages (deferred to Phase 6)
+   - ✅ Pin important messages (pin/unpin with visual indicator)
    - [ ] Reply in thread (deferred to Phase 6)
-   - [ ] Star/save messages (deferred to Phase 6)
+   - ✅ Star/save messages (save/unsave with visual indicator)
 
 4.5. Real-Time Updates
    - ✅ Stream messages from Firestore
