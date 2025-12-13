@@ -1468,128 +1468,149 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         final displayName = otherUser?.displayName ?? 'User';
         final photoURL = otherUser?.photoURL;
 
-        return ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          leading: Stack(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFF4A9EFF),
-                backgroundImage:
-                    photoURL != null ? NetworkImage(photoURL) : null,
-                child: photoURL == null
-                    ? Text(
-                        displayName[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: Colors.grey,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF1A1D21),
-                      width: 2,
-                    ),
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => DMChatScreen(
+                    workspace: widget.workspace,
+                    dm: dm,
+                    otherUser: otherUser,
                   ),
                 ),
-              ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  displayName,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight:
-                        unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-              ),
-              if (dm.lastMessage.isNotEmpty)
-                Text(
-                  _formatDMTime(dm.lastMessageAt),
-                  style: TextStyle(
-                    color: unreadCount > 0
-                        ? const Color(0xFF4A9EFF)
-                        : Colors.white54,
-                    fontSize: 12,
-                    fontWeight:
-                        unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-            ],
-          ),
-          subtitle: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  dm.lastMessage.isEmpty ? 'No messages yet' : dm.lastMessage,
-                  style: TextStyle(
-                    color:
-                        dm.lastMessage.isEmpty ? Colors.white38 : Colors.white70,
-                    fontSize: 14,
-                    fontWeight:
-                        unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (unreadCount > 0)
-                Container(
-                  margin: const EdgeInsets.only(left: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A9EFF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    unreadCount > 99 ? '99+' : unreadCount.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          onTap: () {
-            if (unreadCount > 0) {
-              _dmService.markAsRead(
-                workspaceId: widget.workspace.id,
-                dmId: dm.id,
-                userId: currentUserId,
               );
-            }
-
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DMChatScreen(
-                  workspace: widget.workspace,
-                  dm: dm,
-                  otherUser: otherUser,
-                ),
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar with online indicator
+                  Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: const Color(0xFF4A9EFF),
+                        backgroundImage:
+                            photoURL != null ? NetworkImage(photoURL) : null,
+                        child: photoURL == null
+                            ? Text(
+                                displayName[0].toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: otherUser?.isOnline == true
+                                ? const Color(0xFF22C55E)
+                                : Colors.grey,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF1A1D21),
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  // Name and last message
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                displayName,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: unreadCount > 0
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (dm.lastMessage.isNotEmpty)
+                              Text(
+                                _formatDMTime(dm.lastMessageAt),
+                                style: TextStyle(
+                                  color: unreadCount > 0
+                                      ? const Color(0xFF4A9EFF)
+                                      : Colors.white54,
+                                  fontSize: 12,
+                                  fontWeight: unreadCount > 0
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (dm.lastMessage.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  dm.lastMessage,
+                                  style: TextStyle(
+                                    color: unreadCount > 0
+                                        ? Colors.white70
+                                        : Colors.white54,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (unreadCount > 0) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF4A9EFF),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    unreadCount.toString(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
