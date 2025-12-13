@@ -650,26 +650,23 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             ),
           );
         },
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Icon(
                 channel.isPrivate ? Icons.lock : Icons.tag,
                 size: 18,
                 color: Colors.white.withValues(alpha: 0.6),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  channel.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 8),
+              Text(
+                channel.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],
@@ -996,6 +993,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               if (snapshot.hasData) {
                 final dms = snapshot.data ?? [];
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     ...dms.map((dm) => _buildDMItem(dm, userId)),
                     _buildAddDMButton(),
@@ -1207,6 +1205,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
                   CircleAvatar(
                     radius: 9,
@@ -1225,7 +1224,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                           )
                         : null,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       displayName,
@@ -1236,6 +1235,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                             ? FontWeight.w600
                             : FontWeight.w400,
                       ),
+                      textAlign: TextAlign.start,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
