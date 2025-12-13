@@ -306,9 +306,119 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       color: Colors.white.withValues(alpha: 0.7),
                       size: 24,
                     ),
+                    const SizedBox(width: 4),
+                    // Share workspace code button
+                    GestureDetector(
+                      onTap: () => _showWorkspaceCodeModal(),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.share,
+                          color: Colors.white.withValues(alpha: 0.7),
+                          size: 18,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showWorkspaceCodeModal() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D3748),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.group_add, color: Color(0xFF4A9EFF)),
+            SizedBox(width: 12),
+            Text(
+              'Workspace Kodu',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Bu kodu paylaşarak başkalarını workspace\'e davet edebilirsiniz:',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1D21),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF4A9EFF).withValues(alpha: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.workspace.inviteCode,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: widget.workspace.inviteCode),
+                      );
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Kod kopyalandı!'),
+                          backgroundColor: Color(0xFF22C55E),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Icons.copy,
+                      color: Color(0xFF4A9EFF),
+                    ),
+                    tooltip: 'Kopyala',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Kapat',
+              style: TextStyle(color: Colors.white70),
             ),
           ),
         ],
