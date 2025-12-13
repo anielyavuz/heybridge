@@ -151,8 +151,8 @@ HeyBridge - Slack Clone Development Roadmap
 4.5. Real-Time Updates
    - ✅ Stream messages from Firestore
    - [ ] Typing indicators (deferred to Phase 7)
-   - [ ] Online/offline status (deferred to Phase 7)
-   - [ ] Message delivery status (deferred to Phase 7)
+   - ✅ Online/offline status (real-time presence with 1-min heartbeat)
+   - ✅ Message delivery status (WhatsApp-style tick marks: ✓ sent, ✓✓ delivered, blue ✓✓ read)
    - [ ] Read receipts (optional) (deferred to Phase 7)
    - [ ] Push notifications for new messages (deferred to Phase 7)
 
@@ -233,8 +233,8 @@ HeyBridge - Slack Clone Development Roadmap
    - [ ] Logout
 
 
-## PHASE 7: Notifications & Presence
--------------------------------------
+## PHASE 7: Notifications & Presence (PARTIALLY COMPLETED)
+-----------------------------------------------------------
 7.1. Push Notifications
    - [ ] Firebase Cloud Messaging setup
    - [ ] Notification permissions
@@ -245,13 +245,16 @@ HeyBridge - Slack Clone Development Roadmap
    - [ ] Mute notifications
    - [ ] Do Not Disturb mode
 
-7.2. Presence System
-   - [ ] Online/offline status
-   - [ ] Last seen timestamp
-   - [ ] "Active now" indicator
+7.2. Presence System ✅ (COMPLETED)
+   - ✅ Online/offline status (isOnline field in UserModel)
+   - ✅ Last seen timestamp (relative time: "son görülme: X dk önce")
+   - ✅ "Active now" indicator (green dot + "Çevrimiçi" text)
+   - ✅ PresenceService with 1-minute heartbeat
+   - ✅ App lifecycle integration (paused → offline, resumed → online)
+   - ✅ Real-time updates in DM chat header
    - [ ] Away/Do Not Disturb status
    - [ ] Custom status messages
-   - [ ] Presence in user lists
+   - [ ] Presence in user lists (DM list, member list)
 
 
 ## PHASE 8: Polish & Optimization
@@ -324,7 +327,7 @@ users/
     - photoURL: string?
     - createdAt: timestamp
     - lastSeen: timestamp
-    - status: string (online, offline, away)
+    - isOnline: boolean (real-time presence status)
     - workspaceIds: array<string>
 
 workspaces/
@@ -418,6 +421,10 @@ workspaces/
    - ✅ Long-press context menu
    - ✅ Unknown User display name fix
    - ✅ Swipe-to-reply gesture (WhatsApp-style with visible button)
+   - ✅ Copy message text to clipboard
+   - ✅ Pin/unpin messages with visual indicator
+   - ✅ Star/save messages with visual indicator
+   - ✅ WhatsApp-style message status ticks (✓ sent, ✓✓ delivered, blue ✓✓ read)
 ✅ Phase 5: Complete (Direct Messages System - Workspace-specific DMs!)
    - ✅ DM model and service with workspace isolation
    - ✅ DM List screen with unread counts
@@ -425,7 +432,13 @@ workspaces/
    - ✅ New DM screen with workspace member search
    - ✅ Navigation integration
    - ✅ Firestore security rules for DMs
-⏳ Phase 6-9: Planned
+🔄 Phase 7: Partially Complete (Presence System)
+   - ✅ Online/offline status with real-time updates
+   - ✅ Last seen timestamp (relative time format)
+   - ✅ Green dot indicator for online users
+   - ✅ PresenceService with 1-minute heartbeat
+   - ✅ App lifecycle integration
+⏳ Phase 6, 8-9: Planned
 
 
 ## NOTES
