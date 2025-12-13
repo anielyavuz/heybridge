@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/workspace_service.dart';
 import '../services/logger_service.dart';
 import 'sign_up_screen.dart';
 import 'workspace_screen.dart';
+import 'workspace_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
+  final _workspaceService = WorkspaceService();
   final _logger = LoggerService();
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -55,10 +58,25 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
-        _logger.logNavigation('LoginScreen', 'WorkspaceScreen');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
-        );
+        // Check if user has any workspaces
+        final userId = _authService.currentUser?.uid;
+        if (userId != null) {
+          final workspaces = await _workspaceService.getUserWorkspaces(userId);
+
+          if (workspaces.isNotEmpty) {
+            // User has workspaces, go directly to workspace list
+            _logger.logNavigation('LoginScreen', 'WorkspaceListScreen');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const WorkspaceListScreen()),
+            );
+          } else {
+            // No workspaces, show create/join screen
+            _logger.logNavigation('LoginScreen', 'WorkspaceScreen');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const WorkspaceScreen()),
+            );
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
