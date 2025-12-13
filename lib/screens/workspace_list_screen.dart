@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/workspace_service.dart';
 import '../services/logger_service.dart';
+import '../services/preferences_service.dart';
 import '../models/workspace_model.dart';
 import 'login_screen.dart';
 import 'channel_list_screen.dart';
@@ -17,6 +18,7 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
   final _authService = AuthService();
   final _workspaceService = WorkspaceService();
   final _logger = LoggerService();
+  final _preferencesService = PreferencesService();
   List<WorkspaceModel> _workspaces = [];
   bool _isLoading = true;
 
@@ -176,16 +178,22 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
             trailing: workspace.password != null
               ? const Icon(Icons.lock, color: Colors.white60, size: 20)
               : null,
-            onTap: () {
+            onTap: () async {
               _logger.logUI('WorkspaceListScreen', 'workspace_selected',
                 data: {'workspaceId': workspace.id, 'workspaceName': workspace.name}
               );
+
+              // Save last workspace
+              await _preferencesService.saveLastWorkspaceId(workspace.id);
+
               _logger.logNavigation('WorkspaceListScreen', 'ChannelListScreen');
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ChannelListScreen(workspace: workspace),
-                ),
-              );
+              if (mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChannelListScreen(workspace: workspace),
+                  ),
+                );
+              }
             },
           ),
         );

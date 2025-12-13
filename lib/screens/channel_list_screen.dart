@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/channel_service.dart';
 import '../services/logger_service.dart';
+import '../services/workspace_service.dart';
+import '../services/preferences_service.dart';
+import '../services/dm_service.dart';
+import '../services/firestore_service.dart';
 import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
+import '../models/direct_message_model.dart';
+import '../models/user_model.dart';
 import 'chat_screen.dart';
+import 'workspace_screen.dart';
+import 'dm_list_screen.dart';
+import 'dm_chat_screen.dart';
+import 'new_dm_screen.dart';
 
 class ChannelListScreen extends StatefulWidget {
   final WorkspaceModel workspace;
 
-  const ChannelListScreen({
-    super.key,
-    required this.workspace,
-  });
+  const ChannelListScreen({super.key, required this.workspace});
 
   @override
   State<ChannelListScreen> createState() => _ChannelListScreenState();
@@ -21,14 +29,23 @@ class ChannelListScreen extends StatefulWidget {
 class _ChannelListScreenState extends State<ChannelListScreen> {
   final _authService = AuthService();
   final _channelService = ChannelService();
+  final _workspaceService = WorkspaceService();
+  final _preferencesService = PreferencesService();
+  final _dmService = DMService();
+  final _firestoreService = FirestoreService();
   final _logger = LoggerService();
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _logger.logUI('ChannelListScreen', 'screen_opened',
-      data: {'workspaceId': widget.workspace.id, 'workspaceName': widget.workspace.name}
+    _logger.logUI(
+      'ChannelListScreen',
+      'screen_opened',
+      data: {
+        'workspaceId': widget.workspace.id,
+        'workspaceName': widget.workspace.name,
+      },
     );
   }
 
@@ -38,64 +55,65 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1D21),
-      body: isMobile
-        ? _buildMobileLayout(userId)
-        : _buildDesktopLayout(userId),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1A1D21),
+        body: isMobile
+            ? _buildMobileLayout(userId)
+            : _buildDesktopLayout(userId),
+      ),
     );
   }
 
   Widget _buildMobileLayout(String? userId) {
-    return SafeArea(
-      child: Container(
-        color: const Color(0xFF3F0E40), // Slack purple
-        child: Column(
-          children: [
-            // Workspace Header
-            _buildWorkspaceHeader(),
+    return Container(
+      color: const Color(0xFF1A1D29), // Dark grayish navy blue
+      child: Column(
+        children: [
+          // Workspace Header
+          _buildWorkspaceHeader(),
 
-            // Jump to search
-            _buildJumpToSearch(),
+          // Jump to search
+          _buildJumpToSearch(),
 
-            // Channels List
-            Expanded(
-              child: userId == null
+          // Channels List
+          Expanded(
+            child: userId == null
                 ? const Center(child: CircularProgressIndicator())
                 : StreamBuilder<List<ChannelModel>>(
-                  stream: _channelService.getWorkspaceChannelsStream(
-                    workspaceId: widget.workspace.id,
-                    userId: userId,
+                    stream: _channelService.getWorkspaceChannelsStream(
+                      workspaceId: widget.workspace.id,
+                      userId: userId,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Hata: ${snapshot.error}',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        );
+                      }
+
+                      final channels = snapshot.data ?? [];
+
+                      if (channels.isEmpty) {
+                        return _buildEmptyChannelList();
+                      }
+
+                      return _buildSlackStyleChannelList(channels);
+                    },
                   ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+          ),
 
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          'Hata: ${snapshot.error}',
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      );
-                    }
-
-                    final channels = snapshot.data ?? [];
-
-                    if (channels.isEmpty) {
-                      return _buildEmptyChannelList();
-                    }
-
-                    return _buildSlackStyleChannelList(channels);
-                  },
-                ),
-            ),
-
-            // Bottom Navigation
-            _buildBottomNavigation(),
-          ],
-        ),
+          // Bottom Navigation
+          _buildBottomNavigation(),
+        ],
       ),
     );
   }
@@ -107,9 +125,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         Container(
           width: 260,
           decoration: BoxDecoration(
-            color: const Color(0xFF3F0E40), // Slack purple
+            color: const Color(0xFF0B1A2F), // Dark navy blue
             border: Border(
-              right: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1),
+              right: BorderSide(
+                color: Colors.white.withValues(alpha: 0.1),
+                width: 1,
+              ),
             ),
           ),
           child: Column(
@@ -120,35 +141,38 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               // Channels List
               Expanded(
                 child: userId == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : StreamBuilder<List<ChannelModel>>(
-                      stream: _channelService.getWorkspaceChannelsStream(
-                        workspaceId: widget.workspace.id,
-                        userId: userId,
+                    ? const Center(child: CircularProgressIndicator())
+                    : StreamBuilder<List<ChannelModel>>(
+                        stream: _channelService.getWorkspaceChannelsStream(
+                          workspaceId: widget.workspace.id,
+                          userId: userId,
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text(
+                                'Hata: ${snapshot.error}',
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                            );
+                          }
+
+                          final channels = snapshot.data ?? [];
+
+                          if (channels.isEmpty) {
+                            return _buildEmptyChannelList();
+                          }
+
+                          return _buildSlackStyleChannelList(channels);
+                        },
                       ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Hata: ${snapshot.error}',
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          );
-                        }
-
-                        final channels = snapshot.data ?? [];
-
-                        if (channels.isEmpty) {
-                          return _buildEmptyChannelList();
-                        }
-
-                        return _buildSlackStyleChannelList(channels);
-                      },
-                    ),
               ),
             ],
           ),
@@ -179,10 +203,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   const SizedBox(height: 8),
                   const Text(
                     'Choose a channel from the sidebar',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white54, fontSize: 14),
                   ),
                 ],
               ),
@@ -195,70 +216,235 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
   Widget _buildWorkspaceHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(16, 55, 16, 12),
+      decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Color(0xFF1A1D21), width: 1),
+          bottom: BorderSide(
+            color: Colors.white.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Workspace Dropdown Button
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => _showWorkspaceSwitcher(),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      widget.workspace.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.workspace.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${widget.workspace.memberIds.length} members',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${widget.workspace.memberIds.length} members',
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 12,
-                      ),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      color: Colors.white.withValues(alpha: 0.7),
+                      size: 24,
                     ),
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: Colors.white70),
-                color: const Color(0xFF1A1D21),
-                onSelected: (value) {
-                  if (value == 'back') {
-                    Navigator.of(context).pop();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'back',
-                    child: Row(
-                      children: [
-                        Icon(Icons.arrow_back, color: Colors.white70, size: 20),
-                        SizedBox(width: 12),
-                        Text('Back to Workspaces', style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  void _showWorkspaceSwitcher() {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2D3748),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => StreamBuilder<List<WorkspaceModel>>(
+        stream: _workspaceService.getUserWorkspacesStream(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          final workspaces = snapshot.data ?? [];
+
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Switch Workspace',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Color(0xFF1A1D21), height: 1),
+
+                // Workspace List
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: workspaces.length,
+                    itemBuilder: (context, index) {
+                      final workspace = workspaces[index];
+                      final isCurrentWorkspace =
+                          workspace.id == widget.workspace.id;
+
+                      return ListTile(
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isCurrentWorkspace
+                                ? const Color(0xFF4A9EFF)
+                                : const Color(0xFF1A1D21),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Text(
+                              workspace.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          workspace.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${workspace.memberIds.length} members',
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 13,
+                          ),
+                        ),
+                        trailing: isCurrentWorkspace
+                            ? const Icon(Icons.check, color: Color(0xFF4A9EFF))
+                            : null,
+                        onTap: isCurrentWorkspace
+                            ? null
+                            : () async {
+                                // Save last workspace
+                                await _preferencesService.saveLastWorkspaceId(
+                                  workspace.id,
+                                );
+
+                                if (mounted) {
+                                  Navigator.pop(context); // Close bottom sheet
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      builder: (_) => ChannelListScreen(
+                                        workspace: workspace,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                      );
+                    },
+                  ),
+                ),
+
+                const Divider(color: Color(0xFF1A1D21), height: 1),
+
+                // Add Workspace Options
+                ListTile(
+                  leading: const Icon(
+                    Icons.add_circle_outline,
+                    color: Color(0xFF4A9EFF),
+                  ),
+                  title: const Text(
+                    'Create or Join Workspace',
+                    style: TextStyle(
+                      color: Color(0xFF4A9EFF),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context); // Close bottom sheet
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const WorkspaceScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Widget _buildEmptyChannelList() {
     return Center(
@@ -284,10 +470,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             const SizedBox(height: 8),
             const Text(
               'Create a channel to start chatting',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: Colors.white54, fontSize: 13),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -300,7 +483,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4A9EFF),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -309,41 +495,41 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-
   Widget _buildChannelItem(ChannelModel channel) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          _logger.logUI('ChannelListScreen', 'channel_selected',
-            data: {'channelId': channel.id, 'channelName': channel.name}
+          _logger.logUI(
+            'ChannelListScreen',
+            'channel_selected',
+            data: {'channelId': channel.id, 'channelName': channel.name},
           );
           _logger.logNavigation('ChannelListScreen', 'ChatScreen');
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                workspace: widget.workspace,
-                channel: channel,
-              ),
+              builder: (_) =>
+                  ChatScreen(workspace: widget.workspace, channel: channel),
             ),
           );
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             children: [
               Icon(
                 channel.isPrivate ? Icons.lock : Icons.tag,
                 size: 18,
-                color: Colors.white60,
+                color: Colors.white.withValues(alpha: 0.6),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   channel.name,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,
+                    fontWeight: FontWeight.w400,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -359,127 +545,157 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   void _showCreateChannelDialog({required bool isPrivate}) {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
+    bool channelIsPrivate = isPrivate;
 
-    _logger.logUI('ChannelListScreen', 'create_channel_dialog_opened',
-      data: {'isPrivate': isPrivate}
+    _logger.logUI(
+      'ChannelListScreen',
+      'create_channel_dialog_opened',
+      data: {'isPrivate': isPrivate},
     );
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D3748),
-        title: Text(
-          isPrivate ? 'Create Private Channel' : 'Create Channel',
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Channel Name',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                textCapitalization: TextCapitalization.none,
-                decoration: InputDecoration(
-                  hintText: 'e.g. design-team',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  prefixText: '# ',
-                  prefixStyle: const TextStyle(color: Colors.white60),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1D21),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF2D3748),
+          title: Text(
+            channelIsPrivate ? 'Create Private Channel' : 'Create Channel',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Channel Name',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  textCapitalization: TextCapitalization.none,
+                  decoration: InputDecoration(
+                    hintText: 'e.g. design-team',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    prefixText: '# ',
+                    prefixStyle: const TextStyle(color: Colors.white60),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1D21),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Description (Optional)',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: descriptionController,
-                style: const TextStyle(color: Colors.white),
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: 'What is this channel about?',
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1D21),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              if (isPrivate) ...[
                 const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1D21),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.lock, color: Colors.orange, size: 20),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Private channels are only visible to invited members',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ),
-                    ],
+                const Text(
+                  'Description (Optional)',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: descriptionController,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    hintText: 'What is this channel about?',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1D21),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _logger.logUI('ChannelListScreen', 'create_channel_dialog_cancelled');
-              Navigator.of(context).pop();
-            },
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => _handleCreateChannel(
-              context: context,
-              name: nameController.text,
-              description: descriptionController.text.isEmpty
-                ? null
-                : descriptionController.text,
-              isPrivate: isPrivate,
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A9EFF),
-            ),
-            child: _isLoading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Switch(
+                      value: channelIsPrivate,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          channelIsPrivate = value;
+                        });
+                      },
+                      activeColor: const Color(0xFF4A9EFF),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Make channel private',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+                if (channelIsPrivate) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1D21),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.lock, color: Colors.orange, size: 20),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Private channels are only visible to invited members',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              : const Text('Create', style: TextStyle(color: Colors.white)),
+                ],
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () {
+                _logger.logUI(
+                  'ChannelListScreen',
+                  'create_channel_dialog_cancelled',
+                );
+                Navigator.of(context).pop();
+              },
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => _handleCreateChannel(
+                context: context,
+                name: nameController.text,
+                description: descriptionController.text.isEmpty
+                    ? null
+                    : descriptionController.text,
+                isPrivate: channelIsPrivate,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A9EFF),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Create', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -506,7 +722,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     if (!RegExp(r'^[a-z0-9-]+$').hasMatch(cleanName)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Kanal adı sadece küçük harf, rakam ve tire içerebilir'),
+          content: Text(
+            'Kanal adı sadece küçük harf, rakam ve tire içerebilir',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -514,8 +732,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     }
 
     setState(() => _isLoading = true);
-    _logger.logUI('ChannelListScreen', 'create_channel_confirmed',
-      data: {'channelName': cleanName, 'isPrivate': isPrivate}
+    _logger.logUI(
+      'ChannelListScreen',
+      'create_channel_confirmed',
+      data: {'channelName': cleanName, 'isPrivate': isPrivate},
     );
 
     try {
@@ -555,23 +775,31 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   // Jump to search bar
   Widget _buildJumpToSearch() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1D), // Darker background for contrast
+          color: const Color(0xFF0F1018), // Darker background for contrast
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.15),
+            width: 1,
+          ),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.search, color: Colors.white70, size: 18),
-            SizedBox(width: 8),
+            Icon(
+              Icons.search,
+              color: Colors.white.withValues(alpha: 0.6),
+              size: 18,
+            ),
+            const SizedBox(width: 10),
             Text(
               'Jump to...',
               style: TextStyle(
-                color: Colors.white70,
+                color: Colors.white.withValues(alpha: 0.6),
                 fontSize: 14,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -583,7 +811,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   // Slack-style channel list with sections
   Widget _buildSlackStyleChannelList(List<ChannelModel> channels) {
     final publicChannels = channels.where((c) => !c.isPrivate).toList();
-    final privateChannels = channels.where((c) => c.isPrivate).toList();
+    final userId = _authService.currentUser?.uid;
+    // final privateChannels = channels.where((c) => c.isPrivate).toList(); // TODO: Use for DMs
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -609,16 +838,6 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           onTap: () {},
         ),
 
-        const SizedBox(height: 16),
-
-        // STARRED section
-        if (publicChannels.isNotEmpty) ...[
-          _buildSectionHeader('STARRED', Icons.expand_more),
-          // TODO: Add starred channels
-        ],
-
-        const SizedBox(height: 16),
-
         // CHANNELS section
         _buildSectionHeader('CHANNELS', Icons.expand_more),
         ...publicChannels.map((channel) => _buildChannelItem(channel)),
@@ -628,7 +847,28 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
         // DIRECT MESSAGES section
         _buildSectionHeader('DIRECT MESSAGES', Icons.expand_more),
-        // TODO: Add DM list
+
+        // DM List
+        if (userId != null)
+          StreamBuilder<List<DirectMessageModel>>(
+            stream: _dmService.getUserDMsStream(
+              workspaceId: widget.workspace.id,
+              userId: userId,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                final dms = snapshot.data ?? [];
+                return Column(
+                  children: [
+                    ...dms.map((dm) => _buildDMItem(dm, userId)),
+                    _buildAddDMButton(),
+                  ],
+                );
+              }
+              // While loading, show button
+              return _buildAddDMButton();
+            },
+          ),
       ],
     );
   }
@@ -643,16 +883,17 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white70, size: 20),
-              const SizedBox(width: 12),
+              Icon(icon, color: Colors.white.withValues(alpha: 0.7), size: 20),
+              const SizedBox(width: 14),
               Text(
                 label,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -662,25 +903,38 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+  Widget _buildSectionHeader(
+    String title,
+    IconData icon, {
+    VoidCallback? onTap,
+  }) {
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white60, size: 16),
-          const SizedBox(width: 8),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 14),
+          const SizedBox(width: 6),
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.white60,
-              fontSize: 13,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 12,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+              letterSpacing: 0.8,
             ),
           ),
         ],
       ),
     );
+
+    if (onTap != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(onTap: onTap, child: content),
+      );
+    }
+
+    return content;
   }
 
   Widget _buildAddChannelButton() {
@@ -689,16 +943,21 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       child: InkWell(
         onTap: () => _showCreateChannelDialog(isPrivate: false),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             children: [
-              const Icon(Icons.add, color: Colors.white60, size: 18),
-              const SizedBox(width: 12),
+              Icon(
+                Icons.add,
+                color: Colors.white.withValues(alpha: 0.6),
+                size: 18,
+              ),
+              const SizedBox(width: 14),
               Text(
                 'Add channel',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 15,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],
@@ -712,9 +971,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   Widget _buildBottomNavigation() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF350D36), // Darker purple for nav
+        color: const Color(0xFF2B2D42), // Dark gray-blue matching reference
         border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1),
+          top: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1,
+          ),
         ),
       ),
       child: SafeArea(
@@ -736,24 +998,171 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: () {
+          if (label == 'DMs') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DMListScreen(workspace: widget.workspace),
+              ),
+            );
+          }
+        },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
-                color: isActive ? Colors.white : Colors.white60,
-                size: 24,
+                color: isActive
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.6),
+                size: 26,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 label,
                 style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white60,
+                  color: isActive
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.6),
                   fontSize: 11,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDMItem(DirectMessageModel dm, String currentUserId) {
+    final otherUserId = dm.participantIds.firstWhere(
+      (id) => id != currentUserId,
+      orElse: () => dm.participantIds.first,
+    );
+
+    return FutureBuilder<UserModel?>(
+      future: _firestoreService.getUser(otherUserId),
+      builder: (context, snapshot) {
+        final otherUser = snapshot.data;
+        final displayName =
+            otherUser?.displayName ?? otherUser?.email ?? 'Unknown User';
+        final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () async {
+              _logger.logUI(
+                'ChannelListScreen',
+                'dm_selected',
+                data: {'dmId': dm.id, 'otherUserId': otherUserId},
+              );
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => DMChatScreen(
+                    workspace: widget.workspace,
+                    dm: dm,
+                    otherUser: otherUser!,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 9,
+                    backgroundColor: const Color(0xFF4A9EFF),
+                    backgroundImage: otherUser?.photoURL != null
+                        ? NetworkImage(otherUser!.photoURL!)
+                        : null,
+                    child: otherUser?.photoURL == null
+                        ? Text(
+                            displayName[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      displayName,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (unreadCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A9EFF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAddDMButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NewDMScreen(workspace: widget.workspace),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              Icon(
+                Icons.add,
+                color: Colors.white.withValues(alpha: 0.6),
+                size: 18,
+              ),
+              const SizedBox(width: 14),
+              Text(
+                'New direct message',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],

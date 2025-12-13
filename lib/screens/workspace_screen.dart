@@ -453,6 +453,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       data: {'workspaceName': name, 'hasPassword': password != null},
     );
 
+    // Capture context references before async operations
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     try {
       final userId = _authService.currentUser?.uid;
       if (userId == null) throw Exception('Kullanıcı oturumu bulunamadı');
@@ -467,13 +471,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       // Add workspace ID to user's workspaceIds
       await _firestoreService.addUserToWorkspace(userId, workspace.id);
 
-      if (mounted) {
-        Navigator.of(context).pop(); // Close dialog
+      if (mounted && context.mounted) {
+        final inviteCode = workspace.inviteCode ?? '';
+
+        navigator.pop(); // Close dialog
 
         // Show success with invite code
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             backgroundColor: const Color(0xFF2D3748),
             title: const Text(
               'Workspace Created!',
@@ -494,7 +500,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SelectableText(
-                    workspace.inviteCode ?? '',
+                    inviteCode,
                     style: const TextStyle(
                       color: Color(0xFF4A9EFF),
                       fontSize: 24,
@@ -508,8 +514,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             actions: [
               ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pushReplacement(
+                  Navigator.of(dialogContext).pop();
+                  navigator.pushReplacement(
                     MaterialPageRoute(
                       builder: (_) => const WorkspaceListScreen(),
                     ),
@@ -529,7 +535,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
         );
       }
@@ -674,6 +680,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       data: {'inviteCode': inviteCode},
     );
 
+    // Capture context references before any async operations
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     try {
       final userId = _authService.currentUser?.uid;
       if (userId == null) throw Exception('Kullanıcı oturumu bulunamadı');
@@ -685,23 +695,27 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       );
 
       if (workspace != null) {
+        final workspaceName = workspace.name;
+
         // Add workspace ID to user's workspaceIds
         await _firestoreService.addUserToWorkspace(userId, workspace.id);
 
         if (mounted) {
-          Navigator.of(context).pop(); // Close dialog
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${workspace.name} workspace\'ine katıldınız!'),
-              backgroundColor: Colors.green,
-            ),
+          navigator.pop(); // Close dialog
+
+          // Navigate to workspace list immediately
+          navigator.pushReplacement(
+            MaterialPageRoute(builder: (_) => const WorkspaceListScreen()),
           );
 
-          // Navigate to workspace list
-          Future.delayed(const Duration(seconds: 1), () {
+          // Show success message after navigation
+          Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const WorkspaceListScreen()),
+              scaffoldMessenger.showSnackBar(
+                SnackBar(
+                  content: Text('$workspaceName workspace\'ine katıldınız!'),
+                  backgroundColor: Colors.green,
+                ),
               );
             }
           });
@@ -709,7 +723,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
         );
       }

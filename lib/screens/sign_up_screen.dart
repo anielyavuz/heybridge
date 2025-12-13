@@ -83,10 +83,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
           data: {'uid': userCredential!.user!.uid}
         );
 
+        final displayName = _emailController.text.split('@')[0];
+
+        // Update Firebase Auth displayName
+        await userCredential.user!.updateDisplayName(displayName);
+
         final user = UserModel(
           uid: userCredential.user!.uid,
           email: _emailController.text.trim(),
-          displayName: _emailController.text.split('@')[0],
+          displayName: displayName,
           createdAt: DateTime.now(),
           lastSeen: DateTime.now(),
           workspaceIds: [],

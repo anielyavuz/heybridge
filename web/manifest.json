@@ -1,11 +1,11 @@
 {
-    "name": "heybridge",
-    "short_name": "heybridge",
+    "name": "HeyBridge",
+    "short_name": "HeyBridge",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0B1A2F",
+    "theme_color": "#4A9EFF",
+    "description": "A modern team collaboration platform - Slack clone built with Flutter",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

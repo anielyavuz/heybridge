@@ -14,8 +14,8 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      // Users can read their own data and create their profile
-      allow read: if isSignedIn() && request.auth.uid == userId;
+      // Users can read their own data and other authenticated users (for workspace members, DMs, etc.)
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isSignedIn() && request.auth.uid == userId;
       allow delete: if false; // Don't allow user deletion
@@ -34,10 +34,16 @@ service cloud.firestore {
 
       // Members can update workspace to add themselves to memberIds
       // Owner can update any field
+      // Allow joining: user can add themselves to memberIds if they're not already a member
       allow update: if isSignedIn() &&
                        (request.auth.uid == resource.data.ownerId ||
                         (request.auth.uid in request.resource.data.memberIds &&
-                         request.auth.uid in resource.data.memberIds));
+                         request.auth.uid in resource.data.memberIds) ||
+                        // Allow joining workspace (adding self to memberIds)
+                        (request.auth.uid in request.resource.data.memberIds &&
+                         !(request.auth.uid in resource.data.memberIds) &&
+                         // Only memberIds field is being updated
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds'])));
 
       // Only owner can delete workspace
       allow delete: if isSignedIn() &&
@@ -70,37 +76,58 @@ service cloud.firestore {
           // Channel members can create messages
           allow create: if isSignedIn() &&
                            request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.memberIds &&
-                           request.auth.uid == request.resource.data.userId;
+                           request.auth.uid == request.resource.data.senderId;
 
-          // Only message owner can update their message
+          // Only message sender can update their message
           allow update: if isSignedIn() &&
-                           request.auth.uid == resource.data.userId;
+                           request.auth.uid == resource.data.senderId;
 
-          // Only message owner or workspace owner can delete
+          // Only message sender or workspace owner can delete
           allow delete: if isSignedIn() &&
-                           (request.auth.uid == resource.data.userId ||
+                           (request.auth.uid == resource.data.senderId ||
                             request.auth.uid == get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId);
         }
       }
-    }
 
-    // Direct Messages collection (for future use)
-    match /directMessages/{dmId} {
-      // Only participants can read
-      allow read: if isSignedIn() &&
-                     request.auth.uid in resource.data.participantIds;
-
-      // Only participants can create
-      allow create: if isSignedIn() &&
-                       request.auth.uid in request.resource.data.participantIds;
-
-      // Only participants can update
-      allow update: if isSignedIn() &&
+      // Direct Messages subcollection (workspace-specific DMs)
+      match /directMessages/{dmId} {
+        // Only participants can read DM metadata
+        allow read: if isSignedIn() &&
                        request.auth.uid in resource.data.participantIds;
 
-      // Participants can delete
-      allow delete: if isSignedIn() &&
-                       request.auth.uid in resource.data.participantIds;
+        // Only workspace members who are participants can create
+        allow create: if isSignedIn() &&
+                         request.auth.uid in request.resource.data.participantIds &&
+                         request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.memberIds;
+
+        // Only participants can update
+        allow update: if isSignedIn() &&
+                         request.auth.uid in resource.data.participantIds;
+
+        // Participants can archive/delete
+        allow delete: if isSignedIn() &&
+                         request.auth.uid in resource.data.participantIds;
+
+        // DM Messages subcollection
+        match /messages/{messageId} {
+          // Only participants can read DM messages
+          allow read: if isSignedIn() &&
+                         request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
+
+          // Only participants can create DM messages
+          allow create: if isSignedIn() &&
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds &&
+                           request.auth.uid == request.resource.data.senderId;
+
+          // Only message sender can update their message
+          allow update: if isSignedIn() &&
+                           request.auth.uid == resource.data.senderId;
+
+          // Only message sender can delete their message
+          allow delete: if isSignedIn() &&
+                           request.auth.uid == resource.data.senderId;
+        }
+      }
     }
   }
 }

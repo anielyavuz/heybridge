@@ -6,6 +6,9 @@ class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final _logger = LoggerService();
 
+  // Expose firestore instance for direct access when needed
+  FirebaseFirestore get firestore => _firestore;
+
   // Users Collection
   Future<void> createUser(UserModel user) async {
     try {

@@ -63,122 +63,136 @@ HeyBridge - Slack Clone Development Roadmap
    - [ ] Leave workspace
 
 
-## PHASE 3: Channel System 🔄 (NEXT)
+## PHASE 3: Channel System ✅ (COMPLETED)
 --------------------------
 3.1. Channel Model & Database Structure
-   - [ ] Channel Model (id, workspaceId, name, description, isPrivate, memberIds, createdBy, createdAt)
-   - [ ] Firestore subcollection: workspaces/{workspaceId}/channels/{channelId}
-   - [ ] ChannelService (create, read, update, delete, join, leave)
+   - ✅ Channel Model (id, workspaceId, name, description, isPrivate, memberIds, createdBy, createdAt)
+   - ✅ Firestore subcollection: workspaces/{workspaceId}/channels/{channelId}
+   - ✅ ChannelService (create, read, update, delete, join, leave)
 
 3.2. Channel List Screen (Left Sidebar - Main View)
-   - [ ] Display workspace info at top
-   - [ ] Search/Jump to functionality
-   - [ ] Threads section
-   - [ ] Drafts & Sent section
-   - [ ] Mentions & Reactions section
-   - [ ] Starred channels section
-   - [ ] Public channels list
-   - [ ] Private channels list
-   - [ ] Direct Messages list
-   - [ ] Add channel button
-   - [ ] Bottom navigation (Home, DMs, Mentions, You)
+   - ✅ Display workspace info at top
+   - ✅ Search/Jump to functionality
+   - ✅ Threads section (placeholder)
+   - ✅ Drafts & Sent section (placeholder)
+   - ✅ Mentions & Reactions section (placeholder)
+   - [ ] Starred channels section (deferred to Phase 6)
+   - ✅ Public channels list
+   - ✅ Private channels list
+   - ✅ Direct Messages list (placeholder)
+   - ✅ Add channel button
+   - ✅ Bottom navigation (Home, DMs, Mentions, You)
 
 3.3. Channel Creation
-   - [ ] Create channel dialog
-   - [ ] Channel name validation (lowercase, no spaces, #prefix)
-   - [ ] Public/Private toggle
-   - [ ] Channel description
-   - [ ] Auto-add creator to channel members
-   - [ ] Add initial members (for private channels)
+   - ✅ Create channel dialog
+   - ✅ Channel name validation (lowercase, no spaces, #prefix)
+   - ✅ Public/Private toggle
+   - ✅ Channel description
+   - ✅ Auto-add creator to channel members
+   - [ ] Add initial members (for private channels) (deferred to Phase 6)
 
 3.4. Channel Settings
-   - [ ] Edit channel name and description
-   - [ ] Channel members list
-   - [ ] Add/remove members
-   - [ ] Archive/delete channel
-   - [ ] Leave channel
-   - [ ] Notification preferences
+   - ✅ Edit channel name and description
+   - [ ] Channel members list (placeholder - deferred to Phase 6)
+   - [ ] Add/remove members (deferred to Phase 6)
+   - ✅ Archive/delete channel
+   - ✅ Leave channel
+   - [ ] Notification preferences (placeholder - deferred to Phase 7)
 
 
-## PHASE 4: Real-Time Messaging System
+## PHASE 4: Real-Time Messaging System ✅ (COMPLETED)
 ---------------------------------------
 4.1. Message Model & Database Structure
-   - [ ] Message Model (id, channelId, senderId, text, attachments, replyToId, reactions, createdAt, updatedAt, isEdited, isDeleted)
-   - [ ] Firestore subcollection: workspaces/{workspaceId}/channels/{channelId}/messages/{messageId}
-   - [ ] MessageService (send, read, update, delete, react)
+   - ✅ Message Model (id, channelId, senderId, text, attachments, replyToId, reactions, createdAt, updatedAt, isEdited, isDeleted)
+   - ✅ Firestore subcollection: workspaces/{workspaceId}/channels/{channelId}/messages/{messageId}
+   - ✅ MessageService (send, read, update, delete, react)
 
 4.2. Chat Screen (Main Chat Area - Center View)
-   - [ ] Channel header (name, member count, description, info icon)
-   - [ ] Back button (mobile)
-   - [ ] Message list with real-time updates
-   - [ ] Message grouping by date
-   - [ ] Sender info (avatar, name, timestamp)
-   - [ ] Message reactions display
-   - [ ] Thread indicator
-   - [ ] Scroll to bottom button
-   - [ ] Unread message indicator
-   - [ ] Loading states
+   - ✅ Channel header (name, member count, description, info icon)
+   - ✅ Back button (mobile)
+   - ✅ Message list with real-time updates
+   - ✅ Message grouping by date
+   - ✅ Sender info (avatar, name, timestamp)
+   - ✅ Message reactions display
+   - [ ] Thread indicator (deferred to Phase 6)
+   - [ ] Scroll to bottom button (deferred to Phase 8)
+   - [ ] Unread message indicator (deferred to Phase 7)
+   - ✅ Loading states
 
 4.3. Message Input
-   - [ ] Rich text input field
-   - [ ] Placeholder text (e.g., "Message #design-team")
-   - [ ] Formatting toolbar (bold, italic, code, etc.)
-   - [ ] @ mention autocomplete
-   - [ ] # channel reference autocomplete
-   - [ ] Emoji picker
-   - [ ] File attachment button
-   - [ ] Send button
-   - [ ] Voice message option
+   - ✅ Rich text input field
+   - ✅ Placeholder text (e.g., "Message #design-team")
+   - [ ] Formatting toolbar (bold, italic, code, etc.) (deferred to Phase 6)
+   - [ ] @ mention autocomplete (deferred to Phase 6)
+   - [ ] # channel reference autocomplete (deferred to Phase 6)
+   - ✅ Emoji picker
+   - [ ] File attachment button (placeholder - deferred to Phase 6)
+   - ✅ Send button
+   - [ ] Voice message option (deferred to Phase 9)
+   - ✅ Edit mode (shows "Editing message" indicator)
+   - ✅ Reply mode (shows reply preview)
 
 4.4. Message Features
-   - [ ] Send text messages
-   - [ ] Edit messages (show "edited" indicator)
-   - [ ] Delete messages (soft delete with "Message deleted" placeholder)
-   - [ ] React to messages (emoji reactions)
-   - [ ] Copy message text
-   - [ ] Share message link
-   - [ ] Pin important messages
-   - [ ] Reply in thread
-   - [ ] Star/save messages
+   - ✅ Send text messages
+   - ✅ Edit messages (show "edited" indicator)
+   - ✅ Delete messages (soft delete with "This message was deleted" placeholder)
+   - ✅ Reply to messages (with quoted message preview)
+   - ✅ React to messages (emoji reactions with add/remove functionality)
+   - ✅ Long-press menu (Reply, Add Reaction, Copy, Edit, Delete)
+   - ✅ Reaction toggle (click to add/remove reaction)
+   - ✅ Visual feedback for own reactions (highlighted in blue)
+   - ✅ Swipe-to-reply gesture (WhatsApp-style, 40% threshold with Reply button)
+   - [ ] Copy message text (deferred to Phase 6)
+   - [ ] Share message link (deferred to Phase 6)
+   - [ ] Pin important messages (deferred to Phase 6)
+   - [ ] Reply in thread (deferred to Phase 6)
+   - [ ] Star/save messages (deferred to Phase 6)
 
 4.5. Real-Time Updates
-   - [ ] Stream messages from Firestore
-   - [ ] Typing indicators
-   - [ ] Online/offline status
-   - [ ] Message delivery status
-   - [ ] Read receipts (optional)
-   - [ ] Push notifications for new messages
+   - ✅ Stream messages from Firestore
+   - [ ] Typing indicators (deferred to Phase 7)
+   - [ ] Online/offline status (deferred to Phase 7)
+   - [ ] Message delivery status (deferred to Phase 7)
+   - [ ] Read receipts (optional) (deferred to Phase 7)
+   - [ ] Push notifications for new messages (deferred to Phase 7)
 
 
-## PHASE 5: Direct Messages (DMs)
+## PHASE 5: Direct Messages (DMs) ✅ (COMPLETED)
 ----------------------------------
 5.1. DM Model & Database Structure
-   - [ ] DM Model (id, participantIds, lastMessage, lastMessageAt, isArchived)
-   - [ ] Firestore collection: workspaces/{workspaceId}/directMessages/{dmId}
-   - [ ] Reuse Message model for DM messages
-   - [ ] DMService (create, read, archive)
+   - ✅ DM Model (id, workspaceId, participantIds, lastMessage, lastMessageAt, unreadCounts, isArchived)
+   - ✅ Firestore collection: workspaces/{workspaceId}/directMessages/{dmId}
+   - ✅ Reuse Message model for DM messages
+   - ✅ DMService (getOrCreate, read, update, archive, mark as read)
 
-5.2. DM List Screen (Similar to Channel List)
-   - [ ] Recent DMs list
-   - [ ] User avatars with online status
-   - [ ] Last message preview
-   - [ ] Unread count badge
-   - [ ] Search DMs
-   - [ ] Start new DM button
-   - [ ] Archive DM option
+5.2. DM List Screen
+   - ✅ Recent DMs list (sorted by last message time)
+   - ✅ User avatars with placeholder for online status
+   - ✅ Last message preview
+   - ✅ Unread count badge
+   - ✅ Empty state with illustration
+   - ✅ Start new DM button
+   - ✅ Archive DM option (implemented in service)
+   - [ ] Search DMs (deferred to Phase 6)
 
 5.3. DM Chat Screen
-   - [ ] Reuse Chat Screen component
-   - [ ] Show participant info in header
-   - [ ] 1-on-1 conversation layout
-   - [ ] Same message features as channels
-   - [ ] Call buttons (voice/video) - placeholder for future
+   - ✅ Dedicated DM Chat Screen (similar to Channel Chat)
+   - ✅ Show participant info in header with avatar
+   - ✅ 1-on-1 conversation layout
+   - ✅ All message features (send, edit, delete, reply, reactions)
+   - ✅ Swipe-to-reply gesture
+   - ✅ Emoji picker
+   - ✅ Date headers
+   - ✅ Auto-mark as read when opening
+   - [ ] Call buttons (voice/video) - deferred to Phase 9
 
 5.4. Start New DM
-   - [ ] User search/selection dialog
-   - [ ] Filter workspace members
-   - [ ] Create or navigate to existing DM
-   - [ ] Support group DMs (3+ people)
+   - ✅ User search/selection screen
+   - ✅ Filter workspace members (current workspace only)
+   - ✅ Search by name or email
+   - ✅ Create or navigate to existing DM
+   - ✅ Workspace-specific DMs (DMs tied to each workspace)
+   - [ ] Support group DMs (3+ people) - deferred to Phase 9
 
 
 ## PHASE 6: Threading & Advanced Features
@@ -390,8 +404,28 @@ workspaces/
 ## CURRENT PROGRESS
 ===================
 ✅ Phase 1: Complete (Auth, User Management, Initial Workspace Screen)
-🔄 Phase 2: Next (Workspace Management)
-⏳ Phase 3-9: Planned
+✅ Phase 2: Complete (Workspace Management)
+✅ Phase 3: Complete (Channel System)
+✅ Phase 4: Complete (Real-Time Messaging System - All core features implemented!)
+   - ✅ Message send/receive with real-time updates
+   - ✅ Chat bubbles with sender info and timestamps
+   - ✅ Reply to messages with preview
+   - ✅ Edit messages with visual indicator (null safety fix applied)
+   - ✅ Delete messages (soft delete)
+   - ✅ Emoji reactions (add/remove/toggle)
+   - ✅ Emoji picker for messages and reactions
+   - ✅ Date grouping headers
+   - ✅ Long-press context menu
+   - ✅ Unknown User display name fix
+   - ✅ Swipe-to-reply gesture (WhatsApp-style with visible button)
+✅ Phase 5: Complete (Direct Messages System - Workspace-specific DMs!)
+   - ✅ DM model and service with workspace isolation
+   - ✅ DM List screen with unread counts
+   - ✅ DM Chat screen with all messaging features
+   - ✅ New DM screen with workspace member search
+   - ✅ Navigation integration
+   - ✅ Firestore security rules for DMs
+⏳ Phase 6-9: Planned
 
 
 ## NOTES
