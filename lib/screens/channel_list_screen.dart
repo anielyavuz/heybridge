@@ -1700,147 +1700,453 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
   // You tab content
   Widget _buildYouContent() {
-    final user = _authService.currentUser;
+    final userId = _authService.currentUser?.uid;
 
-    return Column(
-      children: [
-        // Profile Header
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 55, 16, 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.1),
-                width: 1,
+    if (userId == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return StreamBuilder<UserModel?>(
+      stream: _firestoreService.getUserStream(userId),
+      builder: (context, snapshot) {
+        final userData = snapshot.data;
+
+        return Column(
+          children: [
+            // Profile Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 55, 16, 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Profil',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          child: const Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'You',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
+
+            // Profile content
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Profile card with avatar and online status
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D3748),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        // Avatar with online indicator
+                        Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundColor: const Color(0xFF4A9EFF),
+                              backgroundImage: userData?.photoURL != null
+                                  ? NetworkImage(userData!.photoURL!)
+                                  : null,
+                              child: userData?.photoURL == null
+                                  ? Text(
+                                      (userData?.displayName ?? userData?.email ?? 'U')[0]
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 36,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            // Online indicator
+                            Positioned(
+                              right: 4,
+                              bottom: 4,
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: userData?.isOnline == true
+                                      ? const Color(0xFF22C55E)
+                                      : Colors.grey,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFF2D3748),
+                                    width: 3,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        // Display name
+                        Text(
+                          userData?.displayName ?? 'Kullanıcı',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Email
+                        Text(
+                          userData?.email ?? '',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Online status badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: userData?.isOnline == true
+                                ? const Color(0xFF22C55E).withValues(alpha: 0.2)
+                                : Colors.grey.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: userData?.isOnline == true
+                                      ? const Color(0xFF22C55E)
+                                      : Colors.grey,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                userData?.isOnline == true
+                                    ? 'Çevrimiçi'
+                                    : 'Çevrimdışı',
+                                style: TextStyle(
+                                  color: userData?.isOnline == true
+                                      ? const Color(0xFF22C55E)
+                                      : Colors.grey,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 16),
+
+                  // Profile details card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D3748),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildProfileDetailRow(
+                          icon: Icons.calendar_today,
+                          label: 'Üyelik Tarihi',
+                          value: userData != null
+                              ? _formatMemberSince(userData.createdAt)
+                              : '-',
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 24),
+                        _buildProfileDetailRow(
+                          icon: Icons.access_time,
+                          label: 'Son Görülme',
+                          value: userData != null
+                              ? (userData.isOnline
+                                  ? 'Şu an aktif'
+                                  : _formatLastSeenProfile(userData.lastSeen))
+                              : '-',
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 24),
+                        _buildProfileDetailRow(
+                          icon: Icons.workspaces_outline,
+                          label: 'Workspace Sayısı',
+                          value: userData?.workspaceIds.length.toString() ?? '0',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Menu items
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D3748),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildProfileMenuItem(
+                          icon: Icons.person_outline,
+                          label: 'Profili Düzenle',
+                          onTap: () => _showEditProfileDialog(userData),
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 1),
+                        _buildProfileMenuItem(
+                          icon: Icons.notifications_outlined,
+                          label: 'Bildirimler',
+                          onTap: () {},
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 1),
+                        _buildProfileMenuItem(
+                          icon: Icons.palette_outlined,
+                          label: 'Tema',
+                          onTap: () {},
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 1),
+                        _buildProfileMenuItem(
+                          icon: Icons.settings_outlined,
+                          label: 'Ayarlar',
+                          onTap: () {},
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Logout button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D3748),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(Icons.logout, color: Colors.redAccent),
+                      title: const Text(
+                        'Çıkış Yap',
+                        style: TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 16,
+                        ),
+                      ),
+                      onTap: () async {
+                        // Set offline before signing out
+                        await _presenceService.goOffline();
+                        await _authService.signOut();
+                        if (mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (_) => const WorkspaceScreen(),
+                            ),
+                            (route) => false,
+                          );
+                        }
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // App version
+                  Center(
+                    child: Text(
+                      'HeyBridge v1.0.0',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatMemberSince(DateTime date) {
+    final months = [
+      'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _formatLastSeenProfile(DateTime lastSeen) {
+    final now = DateTime.now();
+    final difference = now.difference(lastSeen);
+
+    if (difference.inMinutes < 1) {
+      return 'Az önce';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} dk önce';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} saat önce';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} gün önce';
+    } else {
+      return _formatMemberSince(lastSeen);
+    }
+  }
+
+  Widget _buildProfileDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF4A9EFF), size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+            ),
           ),
         ),
-
-        // Profile content
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Profile card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D3748),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: const Color(0xFF4A9EFF),
-                      backgroundImage: user?.photoURL != null
-                          ? NetworkImage(user!.photoURL!)
-                          : null,
-                      child: user?.photoURL == null
-                          ? Text(
-                              (user?.displayName ?? user?.email ?? 'U')[0]
-                                  .toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user?.displayName ?? 'User',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user?.email ?? '',
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Menu items
-              _buildProfileMenuItem(
-                icon: Icons.person_outline,
-                label: 'Edit Profile',
-                onTap: () {},
-              ),
-              _buildProfileMenuItem(
-                icon: Icons.notifications_outlined,
-                label: 'Notifications',
-                onTap: () {},
-              ),
-              _buildProfileMenuItem(
-                icon: Icons.settings_outlined,
-                label: 'Preferences',
-                onTap: () {},
-              ),
-
-              const SizedBox(height: 24),
-
-              // Logout button
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.redAccent),
-                title: const Text(
-                  'Sign Out',
-                  style: TextStyle(
-                    color: Colors.redAccent,
-                    fontSize: 16,
-                  ),
-                ),
-                onTap: () async {
-                  // Set offline before signing out
-                  await _presenceService.goOffline();
-                  await _authService.signOut();
-                  if (mounted) {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (_) => const WorkspaceScreen(),
-                      ),
-                      (route) => false,
-                    );
-                  }
-                },
-              ),
-            ],
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
+    );
+  }
+
+  void _showEditProfileDialog(UserModel? userData) {
+    final nameController = TextEditingController(text: userData?.displayName ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D3748),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.person_outline, color: Color(0xFF4A9EFF)),
+            SizedBox(width: 12),
+            Text(
+              'Profili Düzenle',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Görünen Ad',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Adınızı girin',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: const Color(0xFF1A1D21),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'İptal',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              if (newName.isNotEmpty && userData != null) {
+                try {
+                  await _firestoreService.firestore
+                      .collection('users')
+                      .doc(userData.uid)
+                      .update({'displayName': newName});
+
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Profil güncellendi!'),
+                        backgroundColor: Color(0xFF22C55E),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Hata: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A9EFF),
+            ),
+            child: const Text(
+              'Kaydet',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
