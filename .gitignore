@@ -46,3 +46,8 @@ app.*.map.json
 
 # Raspberry Pi Backend Service (contains sensitive credentials)
 raspberryBackendService/
+
+# Android signing keys (sensitive)
+android/key.properties
+*.keystore
+*.jks

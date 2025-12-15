@@ -40,17 +40,19 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
           _workspaces = workspaces;
           _isLoading = false;
         });
-        _logger.log('Workspaces loaded',
+        _logger.log(
+          'Workspaces loaded',
           category: 'UI',
-          data: {'count': workspaces.length}
+          data: {'count': workspaces.length},
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _logger.log('Failed to load workspaces',
+      _logger.log(
+        'Failed to load workspaces',
         level: LogLevel.error,
         category: 'UI',
-        data: {'error': e.toString()}
+        data: {'error': e.toString()},
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -70,10 +72,7 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1D21),
         elevation: 0,
-        title: const Text(
-          'Workspaces',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Workspaces', style: TextStyle(color: Colors.white)),
         actions: [
           IconButton(
             onPressed: () async {
@@ -93,8 +92,8 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
         ],
       ),
       body: _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : _workspaces.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _workspaces.isEmpty
           ? _buildEmptyState()
           : _buildWorkspaceList(),
     );
@@ -122,10 +121,7 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
           const SizedBox(height: 8),
           const Text(
             'Create or join a workspace to get started',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.white54, fontSize: 14),
           ),
         ],
       ),
@@ -169,22 +165,27 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
               ),
             ),
             subtitle: workspace.description != null
-              ? Text(
-                  workspace.description!,
-                  style: const TextStyle(color: Colors.white60, fontSize: 13),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                )
-              : Text(
-                  '${workspace.memberIds.length} member${workspace.memberIds.length > 1 ? 's' : ''}',
-                  style: const TextStyle(color: Colors.white60, fontSize: 13),
-                ),
+                ? Text(
+                    workspace.description!,
+                    style: const TextStyle(color: Colors.white60, fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                : Text(
+                    '${workspace.memberIds.length} member${workspace.memberIds.length > 1 ? 's' : ''}',
+                    style: const TextStyle(color: Colors.white60, fontSize: 13),
+                  ),
             trailing: workspace.password != null
-              ? const Icon(Icons.lock, color: Colors.white60, size: 20)
-              : null,
+                ? const Icon(Icons.lock, color: Colors.white60, size: 20)
+                : null,
             onTap: () async {
-              _logger.logUI('WorkspaceListScreen', 'workspace_selected',
-                data: {'workspaceId': workspace.id, 'workspaceName': workspace.name}
+              _logger.logUI(
+                'WorkspaceListScreen',
+                'workspace_selected',
+                data: {
+                  'workspaceId': workspace.id,
+                  'workspaceName': workspace.name,
+                },
               );
 
               // Save last workspace

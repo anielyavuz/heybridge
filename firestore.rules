@@ -12,6 +12,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // System collection (FCM URL, app configs, etc.)
+    // Read-only for all authenticated users
+    match /system/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // Users collection
     // Contains user profile, presence (isOnline, lastSeen), and workspace memberships
     match /users/{userId} {

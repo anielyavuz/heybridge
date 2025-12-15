@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/workspace_service.dart';
 import 'services/preferences_service.dart';
+import 'services/notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/workspace_screen.dart';
 import 'screens/workspace_list_screen.dart';
@@ -12,6 +15,13 @@ import 'screens/channel_list_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize notification service (skip background handler on web)
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
+  await NotificationService.instance.initialize();
+
   runApp(const MyApp());
 }
 
@@ -44,6 +54,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
   final _workspaceService = WorkspaceService();
   final _preferencesService = PreferencesService();
 
+  String? _lastUserId;
+
+  /// Initialize notifications for the logged-in user
+  Future<void> _initializeNotificationsForUser(String userId) async {
+    final notificationService = NotificationService.instance;
+    await notificationService.saveTokenToFirestore(userId);
+    notificationService.setupTokenRefreshListener(userId);
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
@@ -60,11 +79,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         // If user is not logged in, show login screen
         if (!authSnapshot.hasData) {
+          _lastUserId = null;
           return const LoginScreen();
         }
 
         // User is logged in, check if they have workspaces
         final userId = authSnapshot.data!.uid;
+
+        // Save FCM token when user logs in (only once per session)
+        if (_lastUserId != userId) {
+          _lastUserId = userId;
+          _initializeNotificationsForUser(userId);
+        }
 
         return StreamBuilder(
           stream: _workspaceService.getUserWorkspacesStream(userId),

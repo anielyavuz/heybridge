@@ -8,10 +8,10 @@ import '../models/direct_message_model.dart';
 import '../models/message_model.dart';
 import '../models/user_model.dart';
 import '../services/logger_service.dart';
-import '../services/message_service.dart';
 import '../services/dm_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/fcm_api_service.dart';
 
 class DMChatScreen extends StatefulWidget {
   final WorkspaceModel workspace;
@@ -31,10 +31,10 @@ class DMChatScreen extends StatefulWidget {
 
 class _DMChatScreenState extends State<DMChatScreen> {
   final _logger = LoggerService();
-  final _messageService = MessageService();
   final _dmService = DMService();
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
+  final _fcmService = FcmApiService.instance;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _messageFocusNode = FocusNode();
@@ -198,6 +198,15 @@ class _DMChatScreenState extends State<DMChatScreen> {
           dmId: widget.dm.id,
           lastMessage: messageText,
           senderId: userId,
+        );
+
+        // Send push notification to other user
+        _fcmService.notifyDMMessage(
+          dmId: widget.dm.id,
+          senderId: userId,
+          senderName: userName,
+          message: messageText,
+          messageId: message.id,
         );
 
         _logger.logUI('DMChatScreen', 'message_sent',

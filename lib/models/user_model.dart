@@ -3,6 +3,7 @@ class UserModel {
   final String email;
   final String displayName;
   final String? photoURL;
+  final String? avatarId;
   final DateTime createdAt;
   final DateTime lastSeen;
   final bool isOnline;
@@ -13,6 +14,7 @@ class UserModel {
     required this.email,
     required this.displayName,
     this.photoURL,
+    this.avatarId,
     required this.createdAt,
     required this.lastSeen,
     this.isOnline = false,
@@ -25,6 +27,7 @@ class UserModel {
       'email': email,
       'displayName': displayName,
       'photoURL': photoURL,
+      'avatarId': avatarId,
       'createdAt': createdAt.toIso8601String(),
       'lastSeen': lastSeen.toIso8601String(),
       'isOnline': isOnline,
@@ -38,6 +41,7 @@ class UserModel {
       email: map['email'] ?? '',
       displayName: map['displayName'] ?? '',
       photoURL: map['photoURL'],
+      avatarId: map['avatarId'],
       createdAt: DateTime.parse(map['createdAt']),
       lastSeen: DateTime.parse(map['lastSeen']),
       isOnline: map['isOnline'] ?? false,
@@ -50,6 +54,7 @@ class UserModel {
     String? email,
     String? displayName,
     String? photoURL,
+    String? avatarId,
     DateTime? createdAt,
     DateTime? lastSeen,
     bool? isOnline,
@@ -60,6 +65,7 @@ class UserModel {
       email: email ?? this.email,
       displayName: displayName ?? this.displayName,
       photoURL: photoURL ?? this.photoURL,
+      avatarId: avatarId ?? this.avatarId,
       createdAt: createdAt ?? this.createdAt,
       lastSeen: lastSeen ?? this.lastSeen,
       isOnline: isOnline ?? this.isOnline,

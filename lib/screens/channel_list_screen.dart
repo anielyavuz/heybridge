@@ -13,6 +13,7 @@ import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
 import '../models/direct_message_model.dart';
 import '../models/user_model.dart';
+import '../widgets/avatar_picker_dialog.dart';
 import 'chat_screen.dart';
 import 'workspace_screen.dart';
 import 'dm_chat_screen.dart';
@@ -1106,6 +1107,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
   // Bottom navigation bar
   Widget _buildBottomNavigation() {
+    final userId = _authService.currentUser?.uid;
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2B2D42), // Dark gray-blue matching reference
@@ -1118,20 +1121,57 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(Icons.home, 'Home', index: 0),
-            _buildNavItem(Icons.chat_bubble_outline, 'DMs', index: 1),
-            _buildNavItem(Icons.tag, 'Channels', index: 2),
-            _buildNavItem(Icons.person_outline, 'Profil', index: 3),
-          ],
+        child: StreamBuilder<List<DirectMessageModel>>(
+          stream: _dmService.getUserDMsStream(
+            workspaceId: widget.workspace.id,
+            userId: userId ?? '',
+          ),
+          builder: (context, dmSnapshot) {
+            // Count DMs with unread messages (not total unread messages)
+            int unreadDMCount = 0;
+            if (dmSnapshot.hasData && userId != null) {
+              for (final dm in dmSnapshot.data!) {
+                final unread = dm.unreadCounts[userId] ?? 0;
+                if (unread > 0) unreadDMCount++;
+              }
+            }
+
+            return StreamBuilder<List<ChannelModel>>(
+              stream: _channelService.getWorkspaceChannelsStream(
+                workspaceId: widget.workspace.id,
+                userId: userId,
+              ),
+              builder: (context, channelSnapshot) {
+                // Count channels with unread messages
+                int unreadChannelCount = 0;
+                if (channelSnapshot.hasData && userId != null) {
+                  for (final channel in channelSnapshot.data!) {
+                    final unread = channel.unreadCounts[userId] ?? 0;
+                    if (unread > 0) unreadChannelCount++;
+                  }
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildNavItem(Icons.home, 'Home', index: 0),
+                    _buildNavItem(Icons.chat_bubble_outline, 'DMs',
+                        index: 1, badgeCount: unreadDMCount),
+                    _buildNavItem(Icons.tag, 'Channels',
+                        index: 2, badgeCount: unreadChannelCount),
+                    _buildNavItem(Icons.person_outline, 'Profil', index: 3),
+                  ],
+                );
+              },
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, {required int index}) {
+  Widget _buildNavItem(IconData icon, String label,
+      {required int index, int badgeCount = 0}) {
     final isActive = _selectedIndex == index;
     return Material(
       color: Colors.transparent,
@@ -1146,12 +1186,43 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                color: isActive
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.6),
-                size: 26,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    color: isActive
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.6),
+                    size: 26,
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -8,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE4004B),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          badgeCount > 99 ? '99+' : badgeCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 3),
               Text(
@@ -1176,38 +1247,67 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       (id) => id != currentUserId,
       orElse: () => dm.participantIds.first,
     );
+    final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
 
+    // Check cache first - if cached, render immediately without loading state
+    if (_userCache.containsKey(otherUserId)) {
+      final otherUser = _userCache[otherUserId];
+      return _buildDMItemContent(dm, otherUser, unreadCount);
+    }
+
+    // Not in cache - fetch but show nothing until loaded (no flash)
     return FutureBuilder<UserModel?>(
-      future: _firestoreService.getUser(otherUserId),
+      future: _firestoreService.getUser(otherUserId).then((user) {
+        _userCache[otherUserId] = user;
+        return user;
+      }),
       builder: (context, snapshot) {
+        // While loading, show a minimal placeholder (same height, no text)
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(height: 30); // Placeholder with same height
+        }
         final otherUser = snapshot.data;
-        final displayName =
-            otherUser?.displayName ?? otherUser?.email ?? 'Unknown User';
-        final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
+        return _buildDMItemContent(dm, otherUser, unreadCount);
+      },
+    );
+  }
 
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () async {
-              _logger.logUI(
-                'ChannelListScreen',
-                'dm_selected',
-                data: {'dmId': dm.id, 'otherUserId': otherUserId},
-              );
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => DMChatScreen(
-                    workspace: widget.workspace,
-                    dm: dm,
-                    otherUser: otherUser!,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
+  Widget _buildDMItemContent(
+    DirectMessageModel dm,
+    UserModel? otherUser,
+    int unreadCount,
+  ) {
+    final displayName =
+        otherUser?.displayName ?? otherUser?.email ?? 'User';
+    final isOnline = otherUser?.isOnline ?? false;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          if (otherUser == null) return;
+          _logger.logUI(
+            'ChannelListScreen',
+            'dm_selected',
+            data: {'dmId': dm.id, 'otherUserId': otherUser.uid},
+          );
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DMChatScreen(
+                workspace: widget.workspace,
+                dm: dm,
+                otherUser: otherUser,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              // Avatar with online indicator
+              Stack(
                 children: [
                   CircleAvatar(
                     radius: 9,
@@ -1226,47 +1326,66 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                           )
                         : null,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      displayName,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: unreadCount > 0
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
-                      textAlign: TextAlign.start,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (unreadCount > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
+                  // Online indicator dot
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE4004B),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        unreadCount > 99 ? '99+' : unreadCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                        color: isOnline
+                            ? const Color(0xFF22C55E)
+                            : Colors.grey,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF1A1D21),
+                          width: 1.5,
                         ),
                       ),
                     ),
+                  ),
                 ],
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  displayName,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: unreadCount > 0
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                  textAlign: TextAlign.start,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (unreadCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE4004B),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1511,45 +1630,58 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Avatar with online indicator
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: const Color(0xFF4A9EFF),
-                    backgroundImage: photoURL != null
-                        ? NetworkImage(photoURL)
-                        : null,
-                    child: photoURL == null
-                        ? Text(
-                            displayName[0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        : null,
+              // Avatar with online indicator - green border for online users
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: otherUser?.isOnline == true
+                        ? const Color(0xFF22C55E)
+                        : Colors.transparent,
+                    width: 2,
                   ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: otherUser?.isOnline == true
-                            ? const Color(0xFF22C55E)
-                            : Colors.grey,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF1A1D21),
-                          width: 2,
+                ),
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: const Color(0xFF4A9EFF),
+                      backgroundImage: photoURL != null
+                          ? NetworkImage(photoURL)
+                          : null,
+                      child: photoURL == null
+                          ? Text(
+                              displayName[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                    // Small online dot indicator
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: otherUser?.isOnline == true
+                              ? const Color(0xFF22C55E)
+                              : Colors.grey,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFF1A1D21),
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(width: 12),
               // Name and last message - aligned to left
@@ -1878,49 +2010,50 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     ),
                     child: Column(
                       children: [
-                        // Avatar with online indicator
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: const Color(0xFF4A9EFF),
-                              backgroundImage: userData?.photoURL != null
-                                  ? NetworkImage(userData!.photoURL!)
-                                  : null,
-                              child: userData?.photoURL == null
-                                  ? Text(
-                                      (userData?.displayName ??
-                                              userData?.email ??
-                                              'U')[0]
-                                          .toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                            // Online indicator
-                            Positioned(
-                              right: 4,
-                              bottom: 4,
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  color: userData?.isOnline == true
-                                      ? const Color(0xFF22C55E)
-                                      : Colors.grey,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: const Color(0xFF2D3748),
-                                    width: 3,
+                        // Avatar with online indicator - tappable for avatar picker
+                        GestureDetector(
+                          onTap: () => _showAvatarPicker(userData),
+                          child: Stack(
+                            children: [
+                              _buildProfileAvatar(userData, 50),
+                              // Online indicator
+                              Positioned(
+                                right: 4,
+                                bottom: 4,
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: userData?.isOnline == true
+                                        ? const Color(0xFF22C55E)
+                                        : Colors.grey,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFF2D3748),
+                                      width: 3,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                              // Edit indicator
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF4A9EFF),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.edit,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 16),
                         // Display name
@@ -2639,6 +2772,98 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       ),
       trailing: const Icon(Icons.chevron_right, color: Colors.white54),
       onTap: onTap,
+    );
+  }
+
+  /// Show avatar picker dialog
+  void _showAvatarPicker(UserModel? userData) {
+    AvatarPickerDialog.show(
+      context,
+      currentAvatarId: userData?.avatarId,
+      onAvatarSelected: (avatarId) async {
+        final userId = _authService.currentUser?.uid;
+        if (userId == null) return;
+
+        try {
+          await _firestoreService.firestore
+              .collection('users')
+              .doc(userId)
+              .update({'avatarId': avatarId});
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profil resmi güncellendi!'),
+                backgroundColor: Color(0xFF22C55E),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Hata: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  /// Build profile avatar widget with avatarId support
+  Widget _buildProfileAvatar(UserModel? userData, double radius) {
+    final avatarId = userData?.avatarId;
+    final displayName = userData?.displayName ?? userData?.email ?? 'U';
+
+    // If user has selected an avatar from picker
+    if (avatarId != null && avatarId.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFF4A9EFF),
+        child: ClipOval(
+          child: Image.asset(
+            'assets/images/pp/$avatarId.png',
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Text(
+                displayName[0].toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: radius * 0.72,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    // If user has a photoURL (from Google/Apple sign-in)
+    if (userData?.photoURL != null) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFF4A9EFF),
+        backgroundImage: NetworkImage(userData!.photoURL!),
+      );
+    }
+
+    // Default: show first letter of name
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFF4A9EFF),
+      child: Text(
+        displayName[0].toUpperCase(),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: radius * 0.72,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 }

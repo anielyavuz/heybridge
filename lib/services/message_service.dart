@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/message_model.dart';
+import 'fcm_api_service.dart';
 
 class MessageService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FcmApiService _fcmService = FcmApiService.instance;
 
   // Get messages stream for a channel (real-time)
   Stream<List<MessageModel>> getChannelMessagesStream({
@@ -59,7 +61,16 @@ class MessageService {
 
     await messageRef.set(message.toMap());
 
-    // Update channel's last message timestamp
+    // Update channel's last message timestamp and get channel name
+    final channelDoc = await _firestore
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('channels')
+      .doc(channelId)
+      .get();
+
+    final channelName = channelDoc.data()?['name'] ?? 'channel';
+
     await _firestore
       .collection('workspaces')
       .doc(workspaceId)
@@ -68,6 +79,17 @@ class MessageService {
       .update({
         'lastMessageAt': Timestamp.now(),
       });
+
+    // Send push notification via FCM API
+    _fcmService.notifyChannelMessage(
+      workspaceId: workspaceId,
+      channelId: channelId,
+      channelName: channelName,
+      senderId: senderId,
+      senderName: senderName,
+      message: text,
+      messageId: message.id,
+    );
 
     return message;
   }
