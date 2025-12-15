@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'logger_service.dart';
 
 /// FCM Backend API Service
 /// Cloud Run üzerinde çalışan FCM servisine istek gönderir
@@ -11,6 +11,7 @@ class FcmApiService {
   FcmApiService._();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LoggerService _logger = LoggerService();
 
   // Cached URL
   String? _cachedBaseUrl;
@@ -20,24 +21,18 @@ class FcmApiService {
   // Timeout süreleri
   static const Duration _timeout = Duration(seconds: 10);
 
-  void _log(String message) {
-    if (kDebugMode) {
-      debugPrint('[FCM API] $message');
-    }
-  }
-
   /// Firebase'den FCM URL'ini al (cached)
   Future<String?> _getBaseUrl() async {
     // Cache kontrolü
     if (_cachedBaseUrl != null && _cacheTime != null) {
       if (DateTime.now().difference(_cacheTime!) < _cacheDuration) {
-        _log('Using cached URL: $_cachedBaseUrl');
+        _logger.debug('Using cached URL', category: 'FCM_API', data: {'url': _cachedBaseUrl});
         return _cachedBaseUrl;
       }
     }
 
     try {
-      _log('Fetching FCM URL from Firestore...');
+      _logger.info('Fetching FCM URL from Firestore...', category: 'FCM_API');
       final doc = await _firestore
           .collection('system')
           .doc('generalConfigs')
@@ -47,13 +42,13 @@ class FcmApiService {
         final data = doc.data();
         _cachedBaseUrl = data?['fcmURL'] as String?;
         _cacheTime = DateTime.now();
-        _log('FCM URL loaded: $_cachedBaseUrl');
+        _logger.success('FCM URL loaded', category: 'FCM_API', data: {'url': _cachedBaseUrl});
         return _cachedBaseUrl;
       }
-      _log('FCM URL not found in Firestore (document does not exist)');
+      _logger.warning('FCM URL not found in Firestore', category: 'FCM_API');
       return null;
     } catch (e) {
-      _log('Error fetching FCM URL: $e');
+      _logger.error('Error fetching FCM URL: $e', category: 'FCM_API');
       return _cachedBaseUrl; // Return cached value on error
     }
   }
@@ -74,16 +69,16 @@ class FcmApiService {
     required String message,
     required String messageId,
   }) async {
-    _log('Sending channel notification for #$channelName');
+    _logger.info('Sending channel notification', category: 'FCM_API', data: {'channelName': channelName});
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
-        _log('ERROR: FCM URL is null or empty');
+        _logger.error('FCM URL is null or empty', category: 'FCM_API');
         return false;
       }
 
       final url = '$baseUrl/api/notify/channel';
-      _log('POST $url');
+      _logger.debug('POST request', category: 'FCM_API', data: {'url': url});
 
       final response = await http
           .post(
@@ -101,10 +96,13 @@ class FcmApiService {
           )
           .timeout(_timeout);
 
-      _log('Response: ${response.statusCode} - ${response.body}');
+      _logger.info('Channel notification response', category: 'FCM_API', data: {
+        'statusCode': response.statusCode,
+        'body': response.body,
+      });
       return response.statusCode == 200;
     } catch (e) {
-      _log('ERROR sending channel notification: $e');
+      _logger.error('Error sending channel notification: $e', category: 'FCM_API');
       return false;
     }
   }
@@ -117,16 +115,16 @@ class FcmApiService {
     required String message,
     required String messageId,
   }) async {
-    _log('Sending DM notification from $senderName');
+    _logger.info('Sending DM notification', category: 'FCM_API', data: {'senderName': senderName});
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
-        _log('ERROR: FCM URL is null or empty');
+        _logger.error('FCM URL is null or empty', category: 'FCM_API');
         return false;
       }
 
       final url = '$baseUrl/api/notify/dm';
-      _log('POST $url');
+      _logger.debug('POST request', category: 'FCM_API', data: {'url': url});
 
       final response = await http
           .post(
@@ -142,10 +140,13 @@ class FcmApiService {
           )
           .timeout(_timeout);
 
-      _log('Response: ${response.statusCode} - ${response.body}');
+      _logger.info('DM notification response', category: 'FCM_API', data: {
+        'statusCode': response.statusCode,
+        'body': response.body,
+      });
       return response.statusCode == 200;
     } catch (e) {
-      _log('ERROR sending DM notification: $e');
+      _logger.error('Error sending DM notification: $e', category: 'FCM_API');
       return false;
     }
   }
@@ -160,6 +161,7 @@ class FcmApiService {
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
+        _logger.error('FCM URL is null or empty', category: 'FCM_API');
         return false;
       }
 
@@ -178,6 +180,7 @@ class FcmApiService {
 
       return response.statusCode == 200;
     } catch (e) {
+      _logger.error('Error sending user notification: $e', category: 'FCM_API');
       return false;
     }
   }
@@ -192,6 +195,7 @@ class FcmApiService {
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
+        _logger.error('FCM URL is null or empty', category: 'FCM_API');
         return false;
       }
 
@@ -210,6 +214,7 @@ class FcmApiService {
 
       return response.statusCode == 200;
     } catch (e) {
+      _logger.error('Error sending topic notification: $e', category: 'FCM_API');
       return false;
     }
   }
@@ -228,6 +233,7 @@ class FcmApiService {
 
       return response.statusCode == 200;
     } catch (e) {
+      _logger.error('Health check failed: $e', category: 'FCM_API');
       return false;
     }
   }

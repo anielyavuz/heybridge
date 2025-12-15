@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'navigation_service.dart';
+import 'logger_service.dart';
 
 // Conditional import for Platform
 import 'platform_stub.dart' if (dart.library.io) 'dart:io';
@@ -23,6 +24,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LoggerService _logger = LoggerService();
 
   bool _isInitialized = false;
   String? _currentToken;
@@ -260,22 +262,28 @@ class NotificationService {
     try {
       // iOS'ta önce APNS token'ın hazır olmasını bekle
       if (!kIsWeb && Platform.isIOS) {
+        _logger.debug('iOS: Waiting for APNS token...', category: 'FCM');
         String? apnsToken = await _messaging.getAPNSToken();
         int attempts = 0;
         while (apnsToken == null && attempts < 5) {
           await Future.delayed(const Duration(seconds: 1));
           apnsToken = await _messaging.getAPNSToken();
           attempts++;
+          _logger.debug('iOS: APNS attempt $attempts, token: ${apnsToken != null}', category: 'FCM');
         }
         if (apnsToken == null) {
+          _logger.warning('iOS: APNS token is null after 5 attempts', category: 'FCM');
           return null;
         }
+        _logger.success('iOS: APNS token obtained', category: 'FCM');
       }
 
       final token = await _messaging.getToken();
       _currentToken = token;
+      _logger.info('Token obtained: ${token != null ? "${token.substring(0, 20)}..." : "null"}', category: 'FCM');
       return token;
     } catch (e) {
+      _logger.error('Error getting token: $e', category: 'FCM');
       return null;
     }
   }
@@ -289,8 +297,12 @@ class NotificationService {
   /// Save FCM token to Firestore for a user (supports multiple devices)
   Future<void> saveTokenToFirestore(String userId) async {
     try {
+      _logger.info('saveTokenToFirestore called', category: 'FCM', data: {'userId': userId});
       final token = await getToken();
-      if (token == null) return;
+      if (token == null) {
+        _logger.warning('Token is null, cannot save', category: 'FCM');
+        return;
+      }
 
       final platform = kIsWeb ? 'web' : (Platform.isIOS ? 'ios' : 'android');
       final now = DateTime.now().toIso8601String();
@@ -310,6 +322,7 @@ class NotificationService {
       if (existingIndex >= 0) {
         // Token varsa lastUsedAt güncelle
         existingTokens[existingIndex]['lastUsedAt'] = now;
+        _logger.debug('Token already exists, updating lastUsedAt', category: 'FCM');
       } else {
         // Yeni token ekle
         existingTokens.add({
@@ -319,6 +332,7 @@ class NotificationService {
           'createdAt': now,
           'lastUsedAt': now,
         });
+        _logger.info('New token added', category: 'FCM', data: {'platform': platform});
       }
 
       // 30 günden eski token'ları temizle
@@ -336,8 +350,9 @@ class NotificationService {
       await _firestore.collection('users').doc(userId).set({
         'fcmTokens': existingTokens,
       }, SetOptions(merge: true));
+      _logger.success('Token saved to Firestore', category: 'FCM', data: {'totalTokens': existingTokens.length});
     } catch (e) {
-      // Error saving token
+      _logger.error('Error saving token: $e', category: 'FCM');
     }
   }
 

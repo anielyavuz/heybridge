@@ -395,6 +395,88 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 ---
 
+## 📋 Logging System (LoggerService)
+
+### Overview
+HeyBridge uses a centralized logging system (`LoggerService`) for debugging, monitoring, and troubleshooting. All logs are stored locally in JSON format and can be viewed in the app via Profile > "Logları Görüntüle" (See Logs).
+
+### Usage Pattern
+```dart
+// Import
+import 'services/logger_service.dart';
+
+// Initialize in class
+final LoggerService _logger = LoggerService();
+
+// Log methods
+_logger.debug('Debug message', category: 'CATEGORY', data: {'key': 'value'});
+_logger.info('Info message', category: 'CATEGORY', data: {'key': 'value'});
+_logger.warning('Warning message', category: 'CATEGORY');
+_logger.error('Error message', category: 'CATEGORY', data: {'error': e.toString()});
+_logger.success('Success message', category: 'CATEGORY');
+```
+
+### Categories (Use Consistently)
+| Category | Usage |
+|----------|-------|
+| `AUTH` | Authentication operations (login, signup, logout) |
+| `FCM` | Firebase Cloud Messaging token operations |
+| `FCM_API` | FCM backend API calls |
+| `MESSAGE` | Channel and DM message operations |
+| `DM` | Direct message operations |
+| `FIRESTORE` | Firestore database operations |
+| `UI` | UI interactions and navigation |
+| `NAVIGATION` | Screen navigation |
+| `PHASE` | Development phase milestones |
+| `FEATURE` | Feature-specific operations |
+
+### Implementation Requirements
+**IMPORTANT**: When adding new services or modifying existing ones, ALWAYS add LoggerService:
+
+1. **Services** - Add `_logger` field and log critical operations:
+   - API calls (start, success, error)
+   - Authentication state changes
+   - Data mutations (create, update, delete)
+   - Error handling
+
+2. **Screens** - Log user interactions:
+   - Button taps
+   - Form submissions
+   - Navigation events
+
+### Log Levels
+- `debug`: Detailed info for debugging (development only)
+- `info`: General information about operations
+- `warning`: Potential issues that don't break functionality
+- `error`: Errors that affect functionality
+- `success`: Successful completion of important operations
+
+### Storage
+- Logs stored in: `heybridge_logs.json` (local device storage)
+- Max logs in memory: 1000 (oldest removed automatically)
+- Can be exported via `_logger.exportLogs()`
+- View in app: Profile > Logları Görüntüle
+
+### Example Implementation
+```dart
+class MyService {
+  final LoggerService _logger = LoggerService();
+
+  Future<void> doSomething() async {
+    _logger.info('Starting operation', category: 'MY_CATEGORY');
+    try {
+      // ... operation
+      _logger.success('Operation completed', category: 'MY_CATEGORY', data: {'result': 'ok'});
+    } catch (e) {
+      _logger.error('Operation failed: $e', category: 'MY_CATEGORY');
+      rethrow;
+    }
+  }
+}
+```
+
+---
+
 ## 🤖 AI Assistant Guidelines
 
 ### When Working on This Project:
@@ -495,7 +577,7 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 ---
 
-**Last Updated**: 2025-12-12
+**Last Updated**: 2025-12-16
 **Current Phase**: Phase 1 Complete ✅ | Phase 2 In Progress 🔄
 **Flutter Version**: 3.8.1+
 **Dart Version**: 3.8.1+

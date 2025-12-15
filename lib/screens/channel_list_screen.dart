@@ -1279,7 +1279,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   ) {
     final displayName =
         otherUser?.displayName ?? otherUser?.email ?? 'User';
-    final isOnline = otherUser?.isOnline ?? false;
+    final isOnline = _isUserOnline(otherUser);
 
     return Material(
       color: Colors.transparent,
@@ -1636,7 +1636,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: otherUser?.isOnline == true
+                    color: _isUserOnline(otherUser)
                         ? const Color(0xFF22C55E)
                         : Colors.transparent,
                     width: 2,
@@ -1669,7 +1669,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: otherUser?.isOnline == true
+                          color: _isUserOnline(otherUser)
                               ? const Color(0xFF22C55E)
                               : Colors.grey,
                           shape: BoxShape.circle,
@@ -2024,7 +2024,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                                   width: 20,
                                   height: 20,
                                   decoration: BoxDecoration(
-                                    color: userData?.isOnline == true
+                                    color: _isUserOnline(userData)
                                         ? const Color(0xFF22C55E)
                                         : Colors.grey,
                                     shape: BoxShape.circle,
@@ -2082,7 +2082,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: userData?.isOnline == true
+                            color: _isUserOnline(userData)
                                 ? const Color(0xFF22C55E).withValues(alpha: 0.2)
                                 : Colors.grey.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
@@ -2094,7 +2094,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                                 width: 8,
                                 height: 8,
                                 decoration: BoxDecoration(
-                                  color: userData?.isOnline == true
+                                  color: _isUserOnline(userData)
                                       ? const Color(0xFF22C55E)
                                       : Colors.grey,
                                   shape: BoxShape.circle,
@@ -2102,11 +2102,11 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                userData?.isOnline == true
+                                _isUserOnline(userData)
                                     ? 'Çevrimiçi'
                                     : 'Çevrimdışı',
                                 style: TextStyle(
-                                  color: userData?.isOnline == true
+                                  color: _isUserOnline(userData)
                                       ? const Color(0xFF22C55E)
                                       : Colors.grey,
                                   fontSize: 12,
@@ -2143,7 +2143,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                           icon: Icons.access_time,
                           label: 'Son Görülme',
                           value: userData != null
-                              ? (userData.isOnline
+                              ? (_isUserOnline(userData)
                                     ? 'Şu an aktif'
                                     : _formatLastSeenProfile(userData.lastSeen))
                               : '-',
@@ -2203,6 +2203,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                           icon: Icons.settings_outlined,
                           label: 'Ayarlar',
                           onTap: () {},
+                        ),
+                        const Divider(color: Color(0xFF1A1D21), height: 1),
+                        _buildProfileMenuItem(
+                          icon: Icons.bug_report_outlined,
+                          label: 'Logları Görüntüle',
+                          onTap: () => _showLogsDialog(),
                         ),
                       ],
                     ),
@@ -2295,6 +2301,16 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     } else {
       return _formatMemberSince(lastSeen);
     }
+  }
+
+  /// Check if user is online based on lastSeen (within last 1 minute)
+  bool _isUserOnline(UserModel? user) {
+    if (user == null) return false;
+    // isOnline flag OR lastSeen within last 1 minute
+    if (user.isOnline) return true;
+    final now = DateTime.now();
+    final difference = now.difference(user.lastSeen);
+    return difference.inMinutes < 1;
   }
 
   Widget _buildProfileDetailRow({
@@ -2863,6 +2879,232 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           fontSize: radius * 0.72,
           fontWeight: FontWeight.bold,
         ),
+      ),
+    );
+  }
+
+  /// Show logs dialog
+  void _showLogsDialog() {
+    final logs = _logger.getLogs();
+    final stats = _logger.getStatistics();
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1A1D21),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Uygulama Logları',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      // Clear logs button
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        onPressed: () {
+                          _logger.clearLogs();
+                          Navigator.of(context).pop();
+                          _showLogsDialog(); // Refresh
+                        },
+                        tooltip: 'Logları Temizle',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Statistics
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D3748),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildLogStatItem('Toplam', '${stats['total_logs']}', Colors.white),
+                    _buildLogStatItem('Hata', '${(stats['by_level'] as Map)['error'] ?? 0}', Colors.redAccent),
+                    _buildLogStatItem('Uyarı', '${(stats['by_level'] as Map)['warning'] ?? 0}', Colors.orange),
+                    _buildLogStatItem('Başarı', '${(stats['by_level'] as Map)['success'] ?? 0}', const Color(0xFF22C55E)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Logs list
+              Expanded(
+                child: logs.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Henüz log kaydı yok',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: logs.length,
+                        reverse: true, // Show newest first
+                        itemBuilder: (context, index) {
+                          final log = logs[logs.length - 1 - index];
+                          return _buildLogItem(log);
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogStatItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogItem(Map<String, dynamic> log) {
+    final level = log['level'] as String;
+    final message = log['message'] as String;
+    final timestamp = log['timestamp'] as String;
+    final category = log['category'] as String?;
+    final data = log['data'] as Map<String, dynamic>?;
+
+    Color levelColor;
+    IconData levelIcon;
+    switch (level) {
+      case 'error':
+        levelColor = Colors.redAccent;
+        levelIcon = Icons.error_outline;
+        break;
+      case 'warning':
+        levelColor = Colors.orange;
+        levelIcon = Icons.warning_amber_outlined;
+        break;
+      case 'success':
+        levelColor = const Color(0xFF22C55E);
+        levelIcon = Icons.check_circle_outline;
+        break;
+      case 'debug':
+        levelColor = Colors.grey;
+        levelIcon = Icons.bug_report_outlined;
+        break;
+      default:
+        levelColor = const Color(0xFF4A9EFF);
+        levelIcon = Icons.info_outline;
+    }
+
+    // Parse timestamp
+    final dateTime = DateTime.parse(timestamp);
+    final formattedTime = '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
+    final formattedDate = '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D3748),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: levelColor.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Icon(levelIcon, color: levelColor, size: 16),
+              const SizedBox(width: 6),
+              if (category != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: levelColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    category,
+                    style: TextStyle(
+                      color: levelColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              const Spacer(),
+              Text(
+                '$formattedDate $formattedTime',
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Message
+          Text(
+            message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+            ),
+          ),
+          // Data
+          if (data != null && data.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              data.toString(),
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

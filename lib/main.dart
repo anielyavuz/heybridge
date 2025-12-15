@@ -7,6 +7,7 @@ import 'services/auth_service.dart';
 import 'services/workspace_service.dart';
 import 'services/preferences_service.dart';
 import 'services/notification_service.dart';
+import 'services/logger_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/workspace_screen.dart';
 import 'screens/workspace_list_screen.dart';
@@ -53,14 +54,24 @@ class _AuthWrapperState extends State<AuthWrapper> {
   final _authService = AuthService();
   final _workspaceService = WorkspaceService();
   final _preferencesService = PreferencesService();
+  final _logger = LoggerService();
 
   String? _lastUserId;
+  bool _fcmInitialized = false;
 
   /// Initialize notifications for the logged-in user
+  /// Called on every app launch, not just login
   Future<void> _initializeNotificationsForUser(String userId) async {
+    if (_fcmInitialized) return;
+    _fcmInitialized = true;
+
     final notificationService = NotificationService.instance;
+
+    // Always try to save token on app launch - service handles duplicates
     await notificationService.saveTokenToFirestore(userId);
     notificationService.setupTokenRefreshListener(userId);
+
+    _logger.success('Token initialization completed', category: 'FCM', data: {'userId': userId});
   }
 
   @override
@@ -86,11 +97,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
         // User is logged in, check if they have workspaces
         final userId = authSnapshot.data!.uid;
 
-        // Save FCM token when user logs in (only once per session)
+        // Initialize FCM token on every app launch (handles duplicates internally)
         if (_lastUserId != userId) {
           _lastUserId = userId;
-          _initializeNotificationsForUser(userId);
+          _fcmInitialized = false; // Reset for new user
         }
+        _initializeNotificationsForUser(userId);
 
         return StreamBuilder(
           stream: _workspaceService.getUserWorkspacesStream(userId),

@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/message_model.dart';
 import 'fcm_api_service.dart';
+import 'logger_service.dart';
 
 class MessageService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FcmApiService _fcmService = FcmApiService.instance;
+  final LoggerService _logger = LoggerService();
 
   // Get messages stream for a channel (real-time)
   Stream<List<MessageModel>> getChannelMessagesStream({
@@ -39,6 +41,11 @@ class MessageService {
     List<String>? attachments,
     String? replyToId,
   }) async {
+    _logger.info('Sending channel message', category: 'MESSAGE', data: {
+      'channelId': channelId,
+      'senderId': senderId,
+    });
+
     final messageRef = _firestore
       .collection('workspaces')
       .doc(workspaceId)
@@ -90,6 +97,11 @@ class MessageService {
       message: text,
       messageId: message.id,
     );
+
+    _logger.success('Channel message sent', category: 'MESSAGE', data: {
+      'messageId': message.id,
+      'channelName': channelName,
+    });
 
     return message;
   }

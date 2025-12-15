@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/direct_message_model.dart';
+import 'logger_service.dart';
 
 class DMService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LoggerService _logger = LoggerService();
 
   // Get or create a DM between two users
   Future<DirectMessageModel> getOrCreateDM({
@@ -10,6 +12,12 @@ class DMService {
     required String userId1,
     required String userId2,
   }) async {
+    _logger.info('Getting or creating DM', category: 'DM', data: {
+      'workspaceId': workspaceId,
+      'userId1': userId1,
+      'userId2': userId2,
+    });
+
     // Sort user IDs to ensure consistent ordering
     final participantIds = [userId1, userId2]..sort();
 
@@ -23,6 +31,9 @@ class DMService {
         .get();
 
     if (existingDMs.docs.isNotEmpty) {
+      _logger.debug('Existing DM found', category: 'DM', data: {
+        'dmId': existingDMs.docs.first.id,
+      });
       return DirectMessageModel.fromMap(
         existingDMs.docs.first.data(),
         existingDMs.docs.first.id,
@@ -46,6 +57,7 @@ class DMService {
     );
 
     await dmRef.set(newDM.toMap());
+    _logger.success('New DM created', category: 'DM', data: {'dmId': newDM.id});
     return newDM;
   }
 
