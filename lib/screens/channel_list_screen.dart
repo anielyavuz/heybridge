@@ -15,7 +15,6 @@ import '../models/direct_message_model.dart';
 import '../models/user_model.dart';
 import 'chat_screen.dart';
 import 'workspace_screen.dart';
-import 'dm_list_screen.dart';
 import 'dm_chat_screen.dart';
 import 'new_dm_screen.dart';
 
@@ -379,7 +378,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      widget.workspace.inviteCode,
+                      widget.workspace.inviteCode ?? '',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -391,7 +390,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   IconButton(
                     onPressed: () {
                       Clipboard.setData(
-                        ClipboardData(text: widget.workspace.inviteCode),
+                        ClipboardData(text: widget.workspace.inviteCode ?? ''),
                       );
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(this.context).showSnackBar(
