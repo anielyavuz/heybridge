@@ -357,6 +357,15 @@ class ChannelService {
     required List<String> memberIds,
   }) async {
     try {
+      _logger.log('Incrementing unread count',
+        category: 'FIRESTORE',
+        data: {
+          'channelId': channelId,
+          'senderId': senderId,
+          'memberIds': memberIds,
+        }
+      );
+
       final updates = <String, dynamic>{};
       for (final memberId in memberIds) {
         if (memberId != senderId) {
@@ -370,7 +379,13 @@ class ChannelService {
           .doc(workspaceId)
           .collection('channels')
           .doc(channelId)
-          .update(updates);
+          .set(updates, SetOptions(merge: true));
+
+        _logger.log('Unread count incremented successfully',
+          level: LogLevel.success,
+          category: 'FIRESTORE',
+          data: {'channelId': channelId, 'updatedMembers': updates.keys.toList()}
+        );
       }
     } catch (e) {
       _logger.log('Failed to increment unread count',
@@ -393,9 +408,9 @@ class ChannelService {
         .doc(workspaceId)
         .collection('channels')
         .doc(channelId)
-        .update({
-          'unreadCounts.$userId': 0,
-        });
+        .set({
+          'unreadCounts': {userId: 0},
+        }, SetOptions(merge: true));
     } catch (e) {
       _logger.log('Failed to mark channel as read',
         level: LogLevel.error,
