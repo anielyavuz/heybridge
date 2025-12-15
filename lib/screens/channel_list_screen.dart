@@ -646,6 +646,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Icon(
                 channel.isPrivate ? Icons.lock : Icons.tag,
@@ -656,6 +657,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               Expanded(
                 child: Text(
                   channel.name,
+                  textAlign: TextAlign.start,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 15,
