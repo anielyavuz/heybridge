@@ -672,7 +672,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.red,
+                    color: const Color(0xFFE4004B),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -1262,7 +1262,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4A9EFF),
+                        color: const Color(0xFFE4004B),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(

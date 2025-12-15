@@ -154,12 +154,13 @@ class _ChatScreenState extends State<ChatScreen> {
           replyToId: _replyingTo?.id,
         );
 
-        // Increment unread count for other members
+        // Increment unread count for all workspace members (public channels)
+        // Use workspace memberIds instead of channel memberIds
         await _channelService.incrementUnreadCount(
           workspaceId: widget.workspace.id,
           channelId: widget.channel.id,
           senderId: userId,
-          memberIds: widget.channel.memberIds,
+          memberIds: widget.workspace.memberIds,
         );
 
         _logger.logUI('ChatScreen', 'message_sent',
