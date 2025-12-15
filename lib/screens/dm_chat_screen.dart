@@ -333,6 +333,14 @@ class _DMChatScreenState extends State<DMChatScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1D21),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios,
+            color: Colors.white,
+            size: 20,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: StreamBuilder<UserModel?>(
           stream: _otherUserStream,
           initialData: _otherUserData,
@@ -978,32 +986,49 @@ class _DMChatScreenState extends State<DMChatScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    focusNode: _messageFocusNode,
-                    style: const TextStyle(color: Colors.white),
-                    maxLines: null,
-                    textInputAction: TextInputAction.newline,
-                    onTap: () {
-                      if (_showEmojiPicker) {
-                        setState(() => _showEmojiPicker = false);
+                  child: KeyboardListener(
+                    focusNode: FocusNode(),
+                    onKeyEvent: (event) {
+                      // Handle Enter key press (without Ctrl/Shift)
+                      if (event is KeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.enter) {
+                        final isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+                        final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+
+                        if (!isCtrlPressed && !isShiftPressed) {
+                          // Enter only: send message
+                          _sendMessage();
+                        }
+                        // Ctrl+Enter or Shift+Enter: let it add newline naturally
                       }
                     },
-                    decoration: InputDecoration(
-                      hintText: 'Message ${_otherUserData?.displayName ?? ""}',
-                      hintStyle: const TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1D21),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
+                    child: TextField(
+                      controller: _messageController,
+                      focusNode: _messageFocusNode,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: null,
+                      textInputAction: TextInputAction.newline,
+                      onTap: () {
+                        if (_showEmojiPicker) {
+                          setState(() => _showEmojiPicker = false);
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Message ${_otherUserData?.displayName ?? ""}',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: const Color(0xFF1A1D21),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                      onSubmitted: (_) => _sendMessage(),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),

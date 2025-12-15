@@ -1,4 +1,4 @@
-package com.example.heybridge
+package com.heyas.heybridge
 
 import io.flutter.embedding.android.FlutterActivity
 

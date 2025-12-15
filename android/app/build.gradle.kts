@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.heybridge.app"
+    namespace = "com.heyas.heybridge"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.heybridge.app"
+        applicationId = "com.heyas.heybridge"
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

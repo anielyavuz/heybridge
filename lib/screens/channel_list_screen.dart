@@ -37,7 +37,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   final _firestoreService = FirestoreService();
   final _logger = LoggerService();
   bool _isLoading = false;
-  int _selectedIndex = 0; // 0: Home, 1: DMs, 2: Mentions, 3: You
+  int _selectedIndex = 0; // 0: Home, 1: DMs, 2: Channels, 3: Profile
 
   @override
   void initState() {
@@ -83,9 +83,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 _buildHomeContent(userId),
                 // DMs tab (index 1)
                 _buildDMsContent(userId),
-                // Mentions tab (index 2)
-                _buildMentionsContent(),
-                // You tab (index 3)
+                // Channels tab (index 2)
+                _buildChannelsContent(userId),
+                // Profile tab (index 3)
                 _buildYouContent(),
               ],
             ),
@@ -923,80 +923,88 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     }
   }
 
-  // Jump to search bar
+  // Jump to search bar with quick action icons
   Widget _buildJumpToSearch() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F1018), // Darker background for contrast
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.15),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.search,
-              color: Colors.white.withValues(alpha: 0.6),
-              size: 18,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Jump to...',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
+      child: Row(
+        children: [
+          // Search bar (compact)
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F1018),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Jump to...',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+          const SizedBox(width: 8),
+          // Quick action icons row
+          _buildQuickActionIcon(Icons.forum_outlined, 'Threads', () {}),
+          _buildQuickActionIcon(Icons.send_outlined, 'Drafts', () {}),
+          _buildQuickActionIcon(Icons.alternate_email, 'Mentions', () {}),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionIcon(
+    IconData icon,
+    String tooltip,
+    VoidCallback onTap,
+  ) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            child: Icon(
+              icon,
+              color: Colors.white.withValues(alpha: 0.6),
+              size: 20,
+            ),
+          ),
         ),
       ),
     );
   }
 
-  // Slack-style channel list with sections
+  // Slack-style channel list with sections (DMs first, then Channels)
   Widget _buildSlackStyleChannelList(List<ChannelModel> channels) {
     final publicChannels = channels.where((c) => !c.isPrivate).toList();
     final userId = _authService.currentUser?.uid;
-    // final privateChannels = channels.where((c) => c.isPrivate).toList(); // TODO: Use for DMs
 
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Threads section
-        _buildMenuSection(
-          icon: Icons.forum_outlined,
-          label: 'Threads',
-          onTap: () {},
-        ),
-
-        // Drafts & Sent section
-        _buildMenuSection(
-          icon: Icons.send_outlined,
-          label: 'Drafts & Sent',
-          onTap: () {},
-        ),
-
-        // Mentions & Reactions section
-        _buildMenuSection(
-          icon: Icons.alternate_email,
-          label: 'Mentions & Reactions',
-          onTap: () {},
-        ),
-
-        // CHANNELS section
-        _buildSectionHeader('CHANNELS', Icons.expand_more),
-        ...publicChannels.map((channel) => _buildChannelItem(channel)),
-        _buildAddChannelButton(),
-
-        const SizedBox(height: 16),
-
-        // DIRECT MESSAGES section
+        // DIRECT MESSAGES section (first)
         _buildSectionHeader('DIRECT MESSAGES', Icons.expand_more),
 
         // DM List
@@ -1021,37 +1029,14 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               return _buildAddDMButton();
             },
           ),
-      ],
-    );
-  }
 
-  Widget _buildMenuSection({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(icon, color: Colors.white.withValues(alpha: 0.7), size: 20),
-              const SizedBox(width: 14),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+        const SizedBox(height: 8),
+
+        // CHANNELS section (second)
+        _buildSectionHeader('CHANNELS', Icons.expand_more),
+        ...publicChannels.map((channel) => _buildChannelItem(channel)),
+        _buildAddChannelButton(),
+      ],
     );
   }
 
@@ -1138,8 +1123,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           children: [
             _buildNavItem(Icons.home, 'Home', index: 0),
             _buildNavItem(Icons.chat_bubble_outline, 'DMs', index: 1),
-            _buildNavItem(Icons.alternate_email, 'Mentions', index: 2),
-            _buildNavItem(Icons.person_outline, 'You', index: 3),
+            _buildNavItem(Icons.tag, 'Channels', index: 2),
+            _buildNavItem(Icons.person_outline, 'Profil', index: 3),
           ],
         ),
       ),
@@ -1327,52 +1312,47 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     return Column(
       children: [
         // DMs Header
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 55, 16, 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.1),
-                width: 1,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Direct Messages',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 19,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
+        SafeArea(
+          bottom: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  width: 1,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.add, color: Colors.white),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          NewDMScreen(workspace: widget.workspace),
+            ),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Direct Messages',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
                     ),
-                  );
-                },
-              ),
-            ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            NewDMScreen(workspace: widget.workspace),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
-
-        // Jump to search
-        _buildJumpToSearch(),
 
         // DMs List
         Expanded(
@@ -1408,6 +1388,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     }
 
                     return ListView.builder(
+                      padding: EdgeInsets.zero,
                       itemCount: dms.length,
                       itemBuilder: (context, index) {
                         final dm = dms[index];
@@ -1465,6 +1446,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
+  // Cache for user data to prevent flickering
+  final Map<String, UserModel?> _userCache = {};
+
   Widget _buildDMListItem(DirectMessageModel dm, String currentUserId) {
     final otherParticipantId = dm.participantIds.firstWhere(
       (id) => id != currentUserId,
@@ -1472,159 +1456,180 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
     final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
 
-    return FutureBuilder<UserModel?>(
-      future: _firestoreService.getUser(otherParticipantId),
-      builder: (context, userSnapshot) {
-        final otherUser = userSnapshot.data;
-        final displayName = otherUser?.displayName ?? 'User';
-        final photoURL = otherUser?.photoURL;
+    // Check cache first
+    if (_userCache.containsKey(otherParticipantId)) {
+      final otherUser = _userCache[otherParticipantId];
+      return _buildDMListItemContent(dm, otherUser, unreadCount);
+    }
 
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => DMChatScreen(
-                    workspace: widget.workspace,
-                    dm: dm,
-                    otherUser: otherUser,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return FutureBuilder<UserModel?>(
+      future: _firestoreService.getUser(otherParticipantId).then((user) {
+        _userCache[otherParticipantId] = user;
+        return user;
+      }),
+      builder: (context, userSnapshot) {
+        // Show placeholder while loading
+        if (userSnapshot.connectionState == ConnectionState.waiting) {
+          return _buildDMListItemContent(
+            dm,
+            null,
+            unreadCount,
+            isLoading: true,
+          );
+        }
+        final otherUser = userSnapshot.data;
+        return _buildDMListItemContent(dm, otherUser, unreadCount);
+      },
+    );
+  }
+
+  Widget _buildDMListItemContent(
+    DirectMessageModel dm,
+    UserModel? otherUser,
+    int unreadCount, {
+    bool isLoading = false,
+  }) {
+    final displayName = otherUser?.displayName ?? 'User';
+    final photoURL = otherUser?.photoURL;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DMChatScreen(
+                workspace: widget.workspace,
+                dm: dm,
+                otherUser: otherUser,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Avatar with online indicator
+              Stack(
                 children: [
-                  // Avatar with online indicator
-                  Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: const Color(0xFF4A9EFF),
-                        backgroundImage: photoURL != null
-                            ? NetworkImage(photoURL)
-                            : null,
-                        child: photoURL == null
-                            ? Text(
-                                displayName[0].toUpperCase(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: otherUser?.isOnline == true
-                                ? const Color(0xFF22C55E)
-                                : Colors.grey,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF1A1D21),
-                              width: 2,
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: const Color(0xFF4A9EFF),
+                    backgroundImage: photoURL != null
+                        ? NetworkImage(photoURL)
+                        : null,
+                    child: photoURL == null
+                        ? Text(
+                            displayName[0].toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                        ),
-                      ),
-                    ],
+                          )
+                        : null,
                   ),
-                  const SizedBox(width: 12),
-                  // Name and last message
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                displayName,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: unreadCount > 0
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (dm.lastMessage.isNotEmpty)
-                              Text(
-                                _formatDMTime(dm.lastMessageAt),
-                                style: TextStyle(
-                                  color: unreadCount > 0
-                                      ? const Color(0xFF4A9EFF)
-                                      : Colors.white54,
-                                  fontSize: 12,
-                                  fontWeight: unreadCount > 0
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                          ],
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: otherUser?.isOnline == true
+                            ? const Color(0xFF22C55E)
+                            : Colors.grey,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF1A1D21),
+                          width: 2,
                         ),
-                        if (dm.lastMessage.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  dm.lastMessage,
-                                  style: TextStyle(
-                                    color: unreadCount > 0
-                                        ? Colors.white70
-                                        : Colors.white54,
-                                    fontSize: 14,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (unreadCount > 0) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF4A9EFF),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(width: 12),
+              // Name and last message - aligned to left
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      displayName,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left,
+                    ),
+                    if (dm.lastMessage.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        dm.lastMessage,
+                        style: TextStyle(
+                          color: unreadCount > 0
+                              ? Colors.white70
+                              : Colors.white54,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.left,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Right side: time and unread badge
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (dm.lastMessage.isNotEmpty)
+                    Text(
+                      _formatDMTime(dm.lastMessageAt),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (unreadCount > 0) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE4004B),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -1643,64 +1648,176 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     }
   }
 
-  // Mentions tab content
-  Widget _buildMentionsContent() {
+  // Channels tab content
+  Widget _buildChannelsContent(String? userId) {
     return Column(
       children: [
-        // Mentions Header
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 55, 16, 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.1),
-                width: 1,
+        // Channels Header
+        SafeArea(
+          bottom: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  width: 1,
+                ),
               ),
             ),
-          ),
-          child: const Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Mentions & Reactions',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Channels',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-
-        // Empty state
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.alternate_email,
-                  size: 64,
-                  color: Colors.white.withValues(alpha: 0.3),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'No mentions yet',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "When someone mentions you, you'll see it here",
-                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                IconButton(
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  onPressed: () => _showCreateChannelDialog(isPrivate: false),
                 ),
               ],
             ),
           ),
         ),
+
+        // Channels List
+        Expanded(
+          child: userId == null
+              ? const Center(child: CircularProgressIndicator())
+              : StreamBuilder<List<ChannelModel>>(
+                  stream: _channelService.getWorkspaceChannelsStream(
+                    workspaceId: widget.workspace.id,
+                    userId: userId,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF4A9EFF),
+                        ),
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Error loading channels: ${snapshot.error}',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                      );
+                    }
+
+                    final channels = snapshot.data ?? [];
+
+                    if (channels.isEmpty) {
+                      return _buildEmptyChannelList();
+                    }
+
+                    return ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: channels.length,
+                      itemBuilder: (context, index) {
+                        final channel = channels[index];
+                        return _buildChannelListItem(channel);
+                      },
+                    );
+                  },
+                ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildChannelListItem(ChannelModel channel) {
+    final userId = _authService.currentUser?.uid;
+    final unreadCount = userId != null
+        ? (channel.unreadCounts[userId] ?? 0)
+        : 0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          _logger.logUI(
+            'ChannelListScreen',
+            'channel_selected',
+            data: {'channelId': channel.id, 'channelName': channel.name},
+          );
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  ChatScreen(workspace: widget.workspace, channel: channel),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                channel.isPrivate ? Icons.lock : Icons.tag,
+                size: 20,
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      channel.name,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    if (channel.description != null &&
+                        channel.description!.isNotEmpty)
+                      Text(
+                        channel.description!,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              if (unreadCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE4004B),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
