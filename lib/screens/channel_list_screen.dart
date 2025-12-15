@@ -337,9 +337,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2D3748),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.group_add, color: Color(0xFF4A9EFF)),
@@ -359,10 +357,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           children: [
             const Text(
               'Bu kodu paylaşarak başkalarını workspace\'e davet edebilirsiniz:',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 16),
             Container(
@@ -401,10 +396,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                         ),
                       );
                     },
-                    icon: const Icon(
-                      Icons.copy,
-                      color: Color(0xFF4A9EFF),
-                    ),
+                    icon: const Icon(Icons.copy, color: Color(0xFF4A9EFF)),
                     tooltip: 'Kopyala',
                   ),
                 ],
@@ -415,10 +407,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Kapat',
-              style: TextStyle(color: Colors.white70),
-            ),
+            child: const Text('Kapat', style: TextStyle(color: Colors.white70)),
           ),
         ],
       ),
@@ -632,6 +621,11 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }
 
   Widget _buildChannelItem(ChannelModel channel) {
+    final userId = _authService.currentUser?.uid;
+    final unreadCount = userId != null
+        ? (channel.unreadCounts[userId] ?? 0)
+        : 0;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -652,7 +646,6 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Icon(
                 channel.isPrivate ? Icons.lock : Icons.tag,
@@ -660,14 +653,37 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 color: Colors.white.withValues(alpha: 0.6),
               ),
               const SizedBox(width: 8),
-              Text(
-                channel.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
+              Expanded(
+                child: Text(
+                  channel.name,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: unreadCount > 0
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
                 ),
               ),
+              if (unreadCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1416,18 +1432,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           const SizedBox(height: 16),
           const Text(
             'No direct messages yet',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 8),
           const Text(
             'Start a conversation with your teammates',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.white54, fontSize: 14),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -1492,8 +1502,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       CircleAvatar(
                         radius: 24,
                         backgroundColor: const Color(0xFF4A9EFF),
-                        backgroundImage:
-                            photoURL != null ? NetworkImage(photoURL) : null,
+                        backgroundImage: photoURL != null
+                            ? NetworkImage(photoURL)
+                            : null,
                         child: photoURL == null
                             ? Text(
                                 displayName[0].toUpperCase(),
@@ -1676,18 +1687,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 const SizedBox(height: 16),
                 const Text(
                   'No mentions yet',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   "When someone mentions you, you'll see it here",
-                  style: TextStyle(
-                    color: Colors.white54,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
                 ),
               ],
             ),
@@ -1765,7 +1770,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                                   : null,
                               child: userData?.photoURL == null
                                   ? Text(
-                                      (userData?.displayName ?? userData?.email ?? 'U')[0]
+                                      (userData?.displayName ??
+                                              userData?.email ??
+                                              'U')[0]
                                           .toUpperCase(),
                                       style: const TextStyle(
                                         color: Colors.white,
@@ -1885,15 +1892,16 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                           label: 'Son Görülme',
                           value: userData != null
                               ? (userData.isOnline
-                                  ? 'Şu an aktif'
-                                  : _formatLastSeenProfile(userData.lastSeen))
+                                    ? 'Şu an aktif'
+                                    : _formatLastSeenProfile(userData.lastSeen))
                               : '-',
                         ),
                         const Divider(color: Color(0xFF1A1D21), height: 24),
                         _buildProfileDetailRow(
                           icon: Icons.workspaces_outline,
                           label: 'Workspace Sayısı',
-                          value: userData?.workspaceIds.length.toString() ?? '0',
+                          value:
+                              userData?.workspaceIds.length.toString() ?? '0',
                         ),
                       ],
                     ),
@@ -1957,13 +1965,13 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: ListTile(
-                      leading: const Icon(Icons.logout, color: Colors.redAccent),
+                      leading: const Icon(
+                        Icons.logout,
+                        color: Colors.redAccent,
+                      ),
                       title: const Text(
                         'Çıkış Yap',
-                        style: TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(color: Colors.redAccent, fontSize: 16),
                       ),
                       onTap: () async {
                         // Set offline before signing out
@@ -2004,8 +2012,18 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
   String _formatMemberSince(DateTime date) {
     final months = [
-      'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+      'Ocak',
+      'Şubat',
+      'Mart',
+      'Nisan',
+      'Mayıs',
+      'Haziran',
+      'Temmuz',
+      'Ağustos',
+      'Eylül',
+      'Ekim',
+      'Kasım',
+      'Aralık',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
@@ -2039,10 +2057,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ),
         Text(
@@ -2058,15 +2073,15 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }
 
   void _showChangeUsernameDialog(UserModel? userData) {
-    final nameController = TextEditingController(text: userData?.displayName ?? '');
+    final nameController = TextEditingController(
+      text: userData?.displayName ?? '',
+    );
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2D3748),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.edit, color: Color(0xFF4A9EFF)),
@@ -2089,10 +2104,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           children: [
             const Text(
               'Yeni Kullanıcı Adı',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -2115,10 +2127,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'İptal',
-              style: TextStyle(color: Colors.white70),
-            ),
+            child: const Text('İptal', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -2154,10 +2163,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4A9EFF),
             ),
-            child: const Text(
-              'Kaydet',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Kaydet', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -2172,9 +2178,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2D3748),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.email_outlined, color: Color(0xFF4A9EFF)),
@@ -2197,10 +2201,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           children: [
             const Text(
               'Yeni E-posta Adresi',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -2221,10 +2222,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             const SizedBox(height: 16),
             const Text(
               'Mevcut Şifre (doğrulama için)',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -2247,10 +2245,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'İptal',
-              style: TextStyle(color: Colors.white70),
-            ),
+            child: const Text('İptal', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -2290,7 +2285,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(this.context).showSnackBar(
                         const SnackBar(
-                          content: Text('Doğrulama e-postası gönderildi. Lütfen yeni e-postanızı doğrulayın.'),
+                          content: Text(
+                            'Doğrulama e-postası gönderildi. Lütfen yeni e-postanızı doğrulayın.',
+                          ),
                           backgroundColor: Color(0xFF22C55E),
                         ),
                       );
@@ -2330,9 +2327,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF2D3748),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.lock_outline, color: Color(0xFF4A9EFF)),
@@ -2354,10 +2349,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             children: [
               const Text(
                 'Mevcut Şifre',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -2378,10 +2370,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               const SizedBox(height: 16),
               const Text(
                 'Yeni Şifre',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -2402,10 +2391,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               const SizedBox(height: 16),
               const Text(
                 'Yeni Şifre (Tekrar)',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -2429,10 +2415,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'İptal',
-              style: TextStyle(color: Colors.white70),
-            ),
+            child: const Text('İptal', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -2440,7 +2423,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               final newPassword = newPasswordController.text;
               final confirmPassword = confirmPasswordController.text;
 
-              if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
+              if (currentPassword.isEmpty ||
+                  newPassword.isEmpty ||
+                  confirmPassword.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Lütfen tüm alanları doldurun'),
@@ -2531,15 +2516,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       leading: Icon(icon, color: Colors.white70),
       title: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-        ),
+        style: const TextStyle(color: Colors.white, fontSize: 16),
       ),
-      trailing: const Icon(
-        Icons.chevron_right,
-        color: Colors.white54,
-      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.white54),
       onTap: onTap,
     );
   }

@@ -348,4 +348,60 @@ class ChannelService {
       throw Exception('Kanal silinemedi: $e');
     }
   }
+
+  // Increment unread count for all members except sender
+  Future<void> incrementUnreadCount({
+    required String workspaceId,
+    required String channelId,
+    required String senderId,
+    required List<String> memberIds,
+  }) async {
+    try {
+      final updates = <String, dynamic>{};
+      for (final memberId in memberIds) {
+        if (memberId != senderId) {
+          updates['unreadCounts.$memberId'] = FieldValue.increment(1);
+        }
+      }
+
+      if (updates.isNotEmpty) {
+        await _firestore
+          .collection('workspaces')
+          .doc(workspaceId)
+          .collection('channels')
+          .doc(channelId)
+          .update(updates);
+      }
+    } catch (e) {
+      _logger.log('Failed to increment unread count',
+        level: LogLevel.error,
+        category: 'FIRESTORE',
+        data: {'channelId': channelId, 'error': e.toString()}
+      );
+    }
+  }
+
+  // Mark channel as read for a user
+  Future<void> markChannelAsRead({
+    required String workspaceId,
+    required String channelId,
+    required String userId,
+  }) async {
+    try {
+      await _firestore
+        .collection('workspaces')
+        .doc(workspaceId)
+        .collection('channels')
+        .doc(channelId)
+        .update({
+          'unreadCounts.$userId': 0,
+        });
+    } catch (e) {
+      _logger.log('Failed to mark channel as read',
+        level: LogLevel.error,
+        category: 'FIRESTORE',
+        data: {'channelId': channelId, 'userId': userId, 'error': e.toString()}
+      );
+    }
+  }
 }

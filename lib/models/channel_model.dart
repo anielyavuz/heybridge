@@ -7,6 +7,7 @@ class ChannelModel {
   final List<String> memberIds;
   final DateTime createdAt;
   final String createdBy;
+  final Map<String, int> unreadCounts; // userId -> unread message count
 
   ChannelModel({
     required this.id,
@@ -17,6 +18,7 @@ class ChannelModel {
     this.memberIds = const [],
     required this.createdAt,
     required this.createdBy,
+    this.unreadCounts = const {},
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class ChannelModel {
       'memberIds': memberIds,
       'createdAt': createdAt.toIso8601String(),
       'createdBy': createdBy,
+      'unreadCounts': unreadCounts,
     };
   }
 
@@ -42,6 +45,11 @@ class ChannelModel {
       memberIds: List<String>.from(map['memberIds'] ?? []),
       createdAt: DateTime.parse(map['createdAt']),
       createdBy: map['createdBy'] ?? '',
+      unreadCounts: Map<String, int>.from(
+        (map['unreadCounts'] as Map<String, dynamic>?)?.map(
+          (key, value) => MapEntry(key, (value as num).toInt()),
+        ) ?? {},
+      ),
     );
   }
 
@@ -54,6 +62,7 @@ class ChannelModel {
     List<String>? memberIds,
     DateTime? createdAt,
     String? createdBy,
+    Map<String, int>? unreadCounts,
   }) {
     return ChannelModel(
       id: id ?? this.id,
@@ -64,6 +73,7 @@ class ChannelModel {
       memberIds: memberIds ?? this.memberIds,
       createdAt: createdAt ?? this.createdAt,
       createdBy: createdBy ?? this.createdBy,
+      unreadCounts: unreadCounts ?? this.unreadCounts,
     );
   }
 }

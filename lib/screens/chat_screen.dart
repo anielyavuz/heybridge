@@ -10,6 +10,7 @@ import '../services/logger_service.dart';
 import '../services/message_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/channel_service.dart';
 import 'channel_settings_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageService = MessageService();
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
+  final _channelService = ChannelService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _messageFocusNode = FocusNode();
@@ -55,6 +57,20 @@ class _ChatScreenState extends State<ChatScreen> {
       workspaceId: widget.workspace.id,
       channelId: widget.channel.id,
     );
+
+    // Mark channel as read when opening
+    _markAsRead();
+  }
+
+  Future<void> _markAsRead() async {
+    final userId = _authService.currentUser?.uid;
+    if (userId != null) {
+      await _channelService.markChannelAsRead(
+        workspaceId: widget.workspace.id,
+        channelId: widget.channel.id,
+        userId: userId,
+      );
+    }
   }
 
   @override
@@ -136,6 +152,14 @@ class _ChatScreenState extends State<ChatScreen> {
           senderPhotoURL: userPhotoURL,
           text: messageText,
           replyToId: _replyingTo?.id,
+        );
+
+        // Increment unread count for other members
+        await _channelService.incrementUnreadCount(
+          workspaceId: widget.workspace.id,
+          channelId: widget.channel.id,
+          senderId: userId,
+          memberIds: widget.channel.memberIds,
         );
 
         _logger.logUI('ChatScreen', 'message_sent',
