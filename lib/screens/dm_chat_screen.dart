@@ -202,6 +202,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
 
         // Send push notification to other user
         _fcmService.notifyDMMessage(
+          workspaceId: widget.workspace.id,
           dmId: widget.dm.id,
           senderId: userId,
           senderName: userName,

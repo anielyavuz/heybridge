@@ -28,6 +28,15 @@ class _DMListScreenState extends State<DMListScreen> {
   final _firestoreService = FirestoreService();
   final _logger = LoggerService();
 
+  /// Check if user is online (isOnline flag OR lastSeen within 1 minute)
+  bool _isUserOnline(UserModel? user) {
+    if (user == null) return false;
+    if (user.isOnline) return true;
+    final now = DateTime.now();
+    final difference = now.difference(user.lastSeen);
+    return difference.inMinutes < 1;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -182,14 +191,16 @@ class _DMListScreenState extends State<DMListScreen> {
     final otherParticipantId = _getOtherParticipantId(dm.participantIds);
     final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
 
-    return FutureBuilder<UserModel?>(
-      future: _firestoreService.getUser(otherParticipantId),
+    // Use StreamBuilder for real-time online status updates
+    return StreamBuilder<UserModel?>(
+      stream: _firestoreService.getUserStream(otherParticipantId),
       builder: (context, userSnapshot) {
         final otherUser = userSnapshot.data;
         final displayName = otherUser?.displayName ?? 'User';
         final photoURL = otherUser?.photoURL;
         final hasValidPhoto = photoURL != null && photoURL.isNotEmpty &&
             (photoURL.startsWith('http://') || photoURL.startsWith('https://'));
+        final isOnline = _isUserOnline(otherUser);
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -210,7 +221,7 @@ class _DMListScreenState extends State<DMListScreen> {
                       )
                     : null,
               ),
-              // Online status indicator (placeholder - will be implemented in Phase 7)
+              // Online status indicator
               Positioned(
                 bottom: 0,
                 right: 0,
@@ -218,7 +229,7 @@ class _DMListScreenState extends State<DMListScreen> {
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Colors.grey,
+                    color: isOnline ? const Color(0xFF22C55E) : Colors.grey,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: const Color(0xFF1A1D21),

@@ -109,13 +109,14 @@ class FcmApiService {
 
   /// DM bildirimi gönder
   Future<bool> notifyDMMessage({
+    required String workspaceId,
     required String dmId,
     required String senderId,
     required String senderName,
     required String message,
     required String messageId,
   }) async {
-    _logger.info('Sending DM notification', category: 'FCM_API', data: {'senderName': senderName});
+    _logger.info('Sending DM notification', category: 'FCM_API', data: {'senderName': senderName, 'workspaceId': workspaceId});
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
@@ -131,6 +132,7 @@ class FcmApiService {
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
+              'workspaceId': workspaceId,
               'dmId': dmId,
               'senderId': senderId,
               'senderName': senderName,

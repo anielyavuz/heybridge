@@ -5,7 +5,8 @@ import 'auth_service.dart';
 import 'logger_service.dart';
 
 /// Service that manages user online/offline presence status.
-/// Updates presence every 1 minute while the app is active.
+/// Updates presence every 30 seconds while the app is active.
+/// A user is considered online if lastSeen is within 1 minute.
 class PresenceService with WidgetsBindingObserver {
   static final PresenceService _instance = PresenceService._internal();
   factory PresenceService() => _instance;
@@ -79,15 +80,15 @@ class PresenceService with WidgetsBindingObserver {
     }
   }
 
-  /// Start the presence update timer (every 1 minute)
+  /// Start the presence update timer (every 30 seconds)
   void _startPresenceUpdates() {
     _presenceTimer?.cancel();
 
     // Update immediately
     _setOnline();
 
-    // Then update every 1 minute
-    _presenceTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+    // Then update every 30 seconds
+    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _setOnline();
     });
   }

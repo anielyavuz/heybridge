@@ -44,8 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Raspberry Pi Backend Service (contains sensitive credentials)
+# Backend Services (contains sensitive credentials)
 raspberryBackendService/
+backendService/
 
 # Android signing keys (sensitive)
 android/key.properties
