@@ -13,7 +13,7 @@ import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
 import '../models/direct_message_model.dart';
 import '../models/user_model.dart';
-import '../widgets/avatar_picker_dialog.dart';
+// import '../widgets/avatar_picker_dialog.dart'; // TODO: Re-enable when Firebase Storage is ready
 import 'chat_screen.dart';
 import 'workspace_screen.dart';
 import 'dm_chat_screen.dart';
@@ -2010,50 +2010,30 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     ),
                     child: Column(
                       children: [
-                        // Avatar with online indicator - tappable for avatar picker
-                        GestureDetector(
-                          onTap: () => _showAvatarPicker(userData),
-                          child: Stack(
-                            children: [
-                              _buildProfileAvatar(userData, 50),
-                              // Online indicator
-                              Positioned(
-                                right: 4,
-                                bottom: 4,
-                                child: Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: _isUserOnline(userData)
-                                        ? const Color(0xFF22C55E)
-                                        : Colors.grey,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: const Color(0xFF2D3748),
-                                      width: 3,
-                                    ),
+                        // Avatar with online indicator
+                        Stack(
+                          children: [
+                            _buildProfileAvatar(userData, 50),
+                            // Online indicator
+                            Positioned(
+                              right: 4,
+                              bottom: 4,
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: _isUserOnline(userData)
+                                      ? const Color(0xFF22C55E)
+                                      : Colors.grey,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFF2D3748),
+                                    width: 3,
                                   ),
                                 ),
                               ),
-                              // Edit indicator
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF4A9EFF),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.edit,
-                                    color: Colors.white,
-                                    size: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
                         // Display name
@@ -2791,73 +2771,15 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  /// Show avatar picker dialog
-  void _showAvatarPicker(UserModel? userData) {
-    AvatarPickerDialog.show(
-      context,
-      currentAvatarId: userData?.avatarId,
-      onAvatarSelected: (avatarId) async {
-        final userId = _authService.currentUser?.uid;
-        if (userId == null) return;
+  // TODO: Re-enable avatar picker when Firebase Storage is ready
+  // void _showAvatarPicker(UserModel? userData) { ... }
 
-        try {
-          await _firestoreService.firestore
-              .collection('users')
-              .doc(userId)
-              .update({'avatarId': avatarId});
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Profil resmi güncellendi!'),
-                backgroundColor: Color(0xFF22C55E),
-              ),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Hata: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      },
-    );
-  }
-
-  /// Build profile avatar widget with avatarId support
+  /// Build profile avatar widget
   Widget _buildProfileAvatar(UserModel? userData, double radius) {
-    final avatarId = userData?.avatarId;
     final displayName = userData?.displayName ?? userData?.email ?? 'U';
 
-    // If user has selected an avatar from picker
-    if (avatarId != null && avatarId.isNotEmpty) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: const Color(0xFF4A9EFF),
-        child: ClipOval(
-          child: Image.asset(
-            'assets/images/pp/$avatarId.png',
-            width: radius * 2,
-            height: radius * 2,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Text(
-                displayName[0].toUpperCase(),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: radius * 0.72,
-                  fontWeight: FontWeight.bold,
-                ),
-              );
-            },
-          ),
-        ),
-      );
-    }
+    // TODO: Re-enable avatarId support when Firebase Storage is ready
+    // Currently disabled to avoid asset loading errors
 
     // If user has a photoURL (from Google/Apple sign-in)
     if (userData?.photoURL != null) {

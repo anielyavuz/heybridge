@@ -41,16 +41,20 @@ class _LoginScreenState extends State<LoginScreen> {
     _logger.logUI('LoginScreen', 'login_button_pressed');
 
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      _logger.logUI('LoginScreen', 'validation_failed',
-        data: {'reason': 'empty_fields'}
+      _logger.logUI(
+        'LoginScreen',
+        'validation_failed',
+        data: {'reason': 'empty_fields'},
       );
       _showError('Lütfen tüm alanları doldurun');
       return;
     }
 
     setState(() => _isLoading = true);
-    _logger.logUI('LoginScreen', 'login_started',
-      data: {'email': _emailController.text.trim()}
+    _logger.logUI(
+      'LoginScreen',
+      'login_started',
+      data: {'email': _emailController.text.trim()},
     );
 
     try {
@@ -85,8 +89,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        _logger.logUI('LoginScreen', 'login_error',
-          data: {'error': e.toString()}
+        _logger.logUI(
+          'LoginScreen',
+          'login_error',
+          data: {'error': e.toString()},
         );
         _showError(e.toString());
       }
@@ -99,10 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -145,10 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () {},
                   child: const Text(
                     'Help',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ),
               ],
@@ -165,10 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 8),
             const Text(
               'Welcome back to your workspace.',
-              style: TextStyle(
-                color: Colors.white60,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white60, fontSize: 14),
             ),
             const SizedBox(height: 32),
             Row(
@@ -193,19 +190,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     _logger.logUI('LoginScreen', 'sign_up_link_pressed');
                     _logger.logNavigation('LoginScreen', 'SignUpScreen');
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SignUpScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const SignUpScreen()),
                     );
                   },
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text(
                       'Sign Up',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 16,
-                      ),
+                      style: TextStyle(color: Colors.white60, fontSize: 16),
                     ),
                   ),
                 ),
@@ -257,10 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () {},
                   child: const Text(
                     'Forgot?',
-                    style: TextStyle(
-                      color: Color(0xFF4A9EFF),
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Color(0xFF4A9EFF), fontSize: 14),
                   ),
                 ),
               ],
@@ -331,24 +320,17 @@ class _LoginScreenState extends State<LoginScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Divider(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
+                  child: Divider(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     'OR CONTINUE WITH',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
                   ),
                 ),
                 Expanded(
-                  child: Divider(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
+                  child: Divider(color: Colors.white.withValues(alpha: 0.2)),
                 ),
               ],
             ),
@@ -436,10 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: () {},
                         child: const Text(
                           'Help',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
                         ),
                       ),
                     ],
@@ -456,10 +435,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   const Text(
                     'Welcome back to your workspace.',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 18,
-                    ),
+                    style: TextStyle(color: Colors.white60, fontSize: 18),
                   ),
                   const SizedBox(height: 48),
                   Container(
@@ -492,8 +468,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         TextButton(
                           onPressed: () {
-                            _logger.logUI('LoginScreen', 'sign_up_link_pressed');
-                            _logger.logNavigation('LoginScreen', 'SignUpScreen');
+                            _logger.logUI(
+                              'LoginScreen',
+                              'sign_up_link_pressed',
+                            );
+                            _logger.logNavigation(
+                              'LoginScreen',
+                              'SignUpScreen',
+                            );
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => const SignUpScreen(),
@@ -651,10 +633,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           'OR CONTINUE WITH',
-                          style: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: Colors.white60, fontSize: 12),
                         ),
                       ),
                       Expanded(
@@ -723,10 +702,7 @@ class _LoginScreenState extends State<LoginScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1E3A5F),
-                  Color(0xFF2D3748),
-                ],
+                colors: [Color(0xFF1E3A5F), Color(0xFF2D3748)],
               ),
             ),
             child: Padding(
@@ -770,8 +746,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF4A9EFF)
-                                            .withValues(alpha: 0.5),
+                                        color: const Color(
+                                          0xFF4A9EFF,
+                                        ).withValues(alpha: 0.5),
                                         blurRadius: 8,
                                         spreadRadius: 2,
                                       ),
@@ -796,10 +773,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Text(
                           'Workspaces are where your team\ncommunicates. Create a new one or join an\nexisting team.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
                         ),
                       ],
                     ),
