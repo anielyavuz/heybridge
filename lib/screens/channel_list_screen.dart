@@ -1322,23 +1322,26 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               // Avatar with online indicator
               Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 9,
-                    backgroundColor: const Color(0xFF4A9EFF),
-                    backgroundImage: (otherUser?.photoURL != null && otherUser!.photoURL!.isNotEmpty)
-                        ? NetworkImage(otherUser.photoURL!)
-                        : null,
-                    child: (otherUser?.photoURL == null || otherUser!.photoURL!.isEmpty)
-                        ? Text(
-                            displayName[0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        : null,
-                  ),
+                  Builder(builder: (context) {
+                    final photo = otherUser?.photoURL;
+                    final hasValidPhoto = photo != null && photo.isNotEmpty &&
+                        (photo.startsWith('http://') || photo.startsWith('https://'));
+                    return CircleAvatar(
+                      radius: 9,
+                      backgroundColor: const Color(0xFF4A9EFF),
+                      backgroundImage: hasValidPhoto ? NetworkImage(photo) : null,
+                      child: !hasValidPhoto
+                          ? Text(
+                              displayName[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    );
+                  }),
                   // Online indicator dot
                   Positioned(
                     right: 0,
@@ -1621,7 +1624,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }) {
     final displayName = otherUser?.displayName ?? 'User';
     final photoURL = otherUser?.photoURL;
-    final hasValidPhoto = photoURL != null && photoURL.isNotEmpty;
+    final hasValidPhoto = photoURL != null && photoURL.isNotEmpty &&
+        (photoURL.startsWith('http://') || photoURL.startsWith('https://'));
 
     return Material(
       color: Colors.transparent,
@@ -2786,6 +2790,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   // TODO: Re-enable avatar picker when Firebase Storage is ready
   // void _showAvatarPicker(UserModel? userData) { ... }
 
+  /// Check if a URL is a valid network URL (http/https)
+  bool _isValidNetworkUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    return url.startsWith('http://') || url.startsWith('https://');
+  }
+
   /// Build profile avatar widget
   Widget _buildProfileAvatar(UserModel? userData, double radius) {
     final displayName = userData?.displayName ?? userData?.email ?? 'U';
@@ -2794,13 +2804,13 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     // Currently disabled to avoid asset loading errors
 
     // If user has a valid photoURL (from Google/Apple sign-in)
-    // Check for both null and empty string
+    // Must be a valid http/https URL
     final photoURL = userData?.photoURL;
-    if (photoURL != null && photoURL.isNotEmpty) {
+    if (_isValidNetworkUrl(photoURL)) {
       return CircleAvatar(
         radius: radius,
         backgroundColor: const Color(0xFF4A9EFF),
-        backgroundImage: NetworkImage(photoURL),
+        backgroundImage: NetworkImage(photoURL!),
       );
     }
 

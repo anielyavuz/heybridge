@@ -1145,7 +1145,8 @@ class _ChatScreenState extends State<ChatScreen> {
             if (!isOwnMessage) ...[
               Builder(builder: (context) {
                 final senderPhoto = message.senderPhotoURL;
-                final hasSenderPhoto = senderPhoto != null && senderPhoto.isNotEmpty;
+                final hasSenderPhoto = senderPhoto != null && senderPhoto.isNotEmpty &&
+                    (senderPhoto.startsWith('http://') || senderPhoto.startsWith('https://'));
                 return CircleAvatar(
                   radius: 16,
                   backgroundColor: const Color(0xFF4A9EFF),

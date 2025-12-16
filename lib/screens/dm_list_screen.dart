@@ -188,7 +188,8 @@ class _DMListScreenState extends State<DMListScreen> {
         final otherUser = userSnapshot.data;
         final displayName = otherUser?.displayName ?? 'User';
         final photoURL = otherUser?.photoURL;
-        final hasValidPhoto = photoURL != null && photoURL.isNotEmpty;
+        final hasValidPhoto = photoURL != null && photoURL.isNotEmpty &&
+            (photoURL.startsWith('http://') || photoURL.startsWith('https://'));
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -358,7 +358,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
             final otherUserName = user?.displayName ?? 'User';
 
             final photoURL = user?.photoURL;
-            final hasValidPhoto = photoURL != null && photoURL.isNotEmpty;
+            final hasValidPhoto = photoURL != null && photoURL.isNotEmpty &&
+                (photoURL.startsWith('http://') || photoURL.startsWith('https://'));
             return Row(
               children: [
                 // Online indicator on avatar
@@ -500,7 +501,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
         final user = snapshot.data ?? _otherUserData;
         final otherUserName = user?.displayName ?? 'User';
         final userPhoto = user?.photoURL;
-        final hasPhoto = userPhoto != null && userPhoto.isNotEmpty;
+        final hasPhoto = userPhoto != null && userPhoto.isNotEmpty &&
+            (userPhoto.startsWith('http://') || userPhoto.startsWith('https://'));
 
         return Center(
           child: Column(
@@ -653,7 +655,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
             if (!isOwnMessage) ...[
               Builder(builder: (context) {
                 final senderPhoto = message.senderPhotoURL;
-                final hasSenderPhoto = senderPhoto != null && senderPhoto.isNotEmpty;
+                final hasSenderPhoto = senderPhoto != null && senderPhoto.isNotEmpty &&
+                    (senderPhoto.startsWith('http://') || senderPhoto.startsWith('https://'));
                 return CircleAvatar(
                   radius: 16,
                   backgroundColor: const Color(0xFF4A9EFF),
