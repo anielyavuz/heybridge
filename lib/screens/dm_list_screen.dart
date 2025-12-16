@@ -188,6 +188,7 @@ class _DMListScreenState extends State<DMListScreen> {
         final otherUser = userSnapshot.data;
         final displayName = otherUser?.displayName ?? 'User';
         final photoURL = otherUser?.photoURL;
+        final hasValidPhoto = photoURL != null && photoURL.isNotEmpty;
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -196,8 +197,8 @@ class _DMListScreenState extends State<DMListScreen> {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: const Color(0xFF4A9EFF),
-                backgroundImage: photoURL != null ? NetworkImage(photoURL) : null,
-                child: photoURL == null
+                backgroundImage: hasValidPhoto ? NetworkImage(photoURL) : null,
+                child: !hasValidPhoto
                     ? Text(
                         displayName[0].toUpperCase(),
                         style: const TextStyle(

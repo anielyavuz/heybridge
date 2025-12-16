@@ -1155,10 +1155,18 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildNavItem(Icons.home, 'Home', index: 0),
-                    _buildNavItem(Icons.chat_bubble_outline, 'DMs',
-                        index: 1, badgeCount: unreadDMCount),
-                    _buildNavItem(Icons.tag, 'Channels',
-                        index: 2, badgeCount: unreadChannelCount),
+                    _buildNavItem(
+                      Icons.chat_bubble_outline,
+                      'DMs',
+                      index: 1,
+                      badgeCount: unreadDMCount,
+                    ),
+                    _buildNavItem(
+                      Icons.tag,
+                      'Channels',
+                      index: 2,
+                      badgeCount: unreadChannelCount,
+                    ),
                     _buildNavItem(Icons.person_outline, 'Profil', index: 3),
                   ],
                 );
@@ -1170,8 +1178,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label,
-      {required int index, int badgeCount = 0}) {
+  Widget _buildNavItem(
+    IconData icon,
+    String label, {
+    required int index,
+    int badgeCount = 0,
+  }) {
     final isActive = _selectedIndex == index;
     return Material(
       color: Colors.transparent,
@@ -1202,7 +1214,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       top: -4,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 2),
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFE4004B),
                           borderRadius: BorderRadius.circular(10),
@@ -1277,8 +1291,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     UserModel? otherUser,
     int unreadCount,
   ) {
-    final displayName =
-        otherUser?.displayName ?? otherUser?.email ?? 'User';
+    final displayName = otherUser?.displayName ?? otherUser?.email ?? 'User';
     final isOnline = _isUserOnline(otherUser);
 
     return Material(
@@ -1312,10 +1325,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   CircleAvatar(
                     radius: 9,
                     backgroundColor: const Color(0xFF4A9EFF),
-                    backgroundImage: otherUser?.photoURL != null
-                        ? NetworkImage(otherUser!.photoURL!)
+                    backgroundImage: (otherUser?.photoURL != null && otherUser!.photoURL!.isNotEmpty)
+                        ? NetworkImage(otherUser.photoURL!)
                         : null,
-                    child: otherUser?.photoURL == null
+                    child: (otherUser?.photoURL == null || otherUser!.photoURL!.isEmpty)
                         ? Text(
                             displayName[0].toUpperCase(),
                             style: const TextStyle(
@@ -1334,9 +1347,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: isOnline
-                            ? const Color(0xFF22C55E)
-                            : Colors.grey,
+                        color: isOnline ? const Color(0xFF22C55E) : Colors.grey,
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: const Color(0xFF1A1D21),
@@ -1610,6 +1621,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }) {
     final displayName = otherUser?.displayName ?? 'User';
     final photoURL = otherUser?.photoURL;
+    final hasValidPhoto = photoURL != null && photoURL.isNotEmpty;
 
     return Material(
       color: Colors.transparent,
@@ -1647,10 +1659,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     CircleAvatar(
                       radius: 22,
                       backgroundColor: const Color(0xFF4A9EFF),
-                      backgroundImage: photoURL != null
+                      backgroundImage: hasValidPhoto
                           ? NetworkImage(photoURL)
                           : null,
-                      child: photoURL == null
+                      child: !hasValidPhoto
                           ? Text(
                               displayName[0].toUpperCase(),
                               style: const TextStyle(
@@ -2232,7 +2244,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   // App version
                   Center(
                     child: Text(
-                      'HeyBridge v1.0.0',
+                      'HeyBridge v1.0.7',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 12,
@@ -2781,12 +2793,14 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     // TODO: Re-enable avatarId support when Firebase Storage is ready
     // Currently disabled to avoid asset loading errors
 
-    // If user has a photoURL (from Google/Apple sign-in)
-    if (userData?.photoURL != null) {
+    // If user has a valid photoURL (from Google/Apple sign-in)
+    // Check for both null and empty string
+    final photoURL = userData?.photoURL;
+    if (photoURL != null && photoURL.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
         backgroundColor: const Color(0xFF4A9EFF),
-        backgroundImage: NetworkImage(userData!.photoURL!),
+        backgroundImage: NetworkImage(photoURL),
       );
     }
 
@@ -2838,7 +2852,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                     children: [
                       // Clear logs button
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.redAccent,
+                        ),
                         onPressed: () {
                           _logger.clearLogs();
                           Navigator.of(context).pop();
@@ -2866,10 +2883,26 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildLogStatItem('Toplam', '${stats['total_logs']}', Colors.white),
-                    _buildLogStatItem('Hata', '${(stats['by_level'] as Map)['error'] ?? 0}', Colors.redAccent),
-                    _buildLogStatItem('Uyarı', '${(stats['by_level'] as Map)['warning'] ?? 0}', Colors.orange),
-                    _buildLogStatItem('Başarı', '${(stats['by_level'] as Map)['success'] ?? 0}', const Color(0xFF22C55E)),
+                    _buildLogStatItem(
+                      'Toplam',
+                      '${stats['total_logs']}',
+                      Colors.white,
+                    ),
+                    _buildLogStatItem(
+                      'Hata',
+                      '${(stats['by_level'] as Map)['error'] ?? 0}',
+                      Colors.redAccent,
+                    ),
+                    _buildLogStatItem(
+                      'Uyarı',
+                      '${(stats['by_level'] as Map)['warning'] ?? 0}',
+                      Colors.orange,
+                    ),
+                    _buildLogStatItem(
+                      'Başarı',
+                      '${(stats['by_level'] as Map)['success'] ?? 0}',
+                      const Color(0xFF22C55E),
+                    ),
                   ],
                 ),
               ),
@@ -2913,10 +2946,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         ),
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
         ),
       ],
     );
@@ -2955,7 +2985,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
     // Parse timestamp
     final dateTime = DateTime.parse(timestamp);
-    final formattedTime = '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
+    final formattedTime =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
     final formattedDate = '${dateTime.day}/${dateTime.month}/${dateTime.year}';
 
     return Container(
@@ -2964,10 +2995,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF2D3748),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: levelColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: levelColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2979,7 +3007,10 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               const SizedBox(width: 6),
               if (category != null) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: levelColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
@@ -2998,10 +3029,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               const Spacer(),
               Text(
                 '$formattedDate $formattedTime',
-                style: const TextStyle(
-                  color: Colors.white38,
-                  fontSize: 10,
-                ),
+                style: const TextStyle(color: Colors.white38, fontSize: 10),
               ),
             ],
           ),
@@ -3009,10 +3037,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           // Message
           Text(
             message,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
           // Data
           if (data != null && data.isNotEmpty) ...[

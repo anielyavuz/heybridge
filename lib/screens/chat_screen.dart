@@ -1143,23 +1143,27 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             // Avatar (only for other users' messages)
             if (!isOwnMessage) ...[
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: const Color(0xFF4A9EFF),
-                backgroundImage: message.senderPhotoURL != null
-                    ? NetworkImage(message.senderPhotoURL!)
-                    : null,
-                child: message.senderPhotoURL == null
-                    ? Text(
-                        message.senderName[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
-              ),
+              Builder(builder: (context) {
+                final senderPhoto = message.senderPhotoURL;
+                final hasSenderPhoto = senderPhoto != null && senderPhoto.isNotEmpty;
+                return CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFF4A9EFF),
+                  backgroundImage: hasSenderPhoto
+                      ? NetworkImage(senderPhoto)
+                      : null,
+                  child: !hasSenderPhoto
+                      ? Text(
+                          message.senderName[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                );
+              }),
               const SizedBox(width: 8),
             ],
 

@@ -357,6 +357,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
             final user = snapshot.data ?? _otherUserData;
             final otherUserName = user?.displayName ?? 'User';
 
+            final photoURL = user?.photoURL;
+            final hasValidPhoto = photoURL != null && photoURL.isNotEmpty;
             return Row(
               children: [
                 // Online indicator on avatar
@@ -365,10 +367,10 @@ class _DMChatScreenState extends State<DMChatScreen> {
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: const Color(0xFF4A9EFF),
-                      backgroundImage: user?.photoURL != null
-                          ? NetworkImage(user!.photoURL!)
+                      backgroundImage: hasValidPhoto
+                          ? NetworkImage(photoURL)
                           : null,
-                      child: user?.photoURL == null
+                      child: !hasValidPhoto
                           ? Text(
                               otherUserName[0].toUpperCase(),
                               style: const TextStyle(
@@ -497,6 +499,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
       builder: (context, snapshot) {
         final user = snapshot.data ?? _otherUserData;
         final otherUserName = user?.displayName ?? 'User';
+        final userPhoto = user?.photoURL;
+        final hasPhoto = userPhoto != null && userPhoto.isNotEmpty;
 
         return Center(
           child: Column(
@@ -505,10 +509,10 @@ class _DMChatScreenState extends State<DMChatScreen> {
               CircleAvatar(
                 radius: 48,
                 backgroundColor: const Color(0xFF4A9EFF),
-                backgroundImage: user?.photoURL != null
-                    ? NetworkImage(user!.photoURL!)
+                backgroundImage: hasPhoto
+                    ? NetworkImage(userPhoto)
                     : null,
-                child: user?.photoURL == null
+                child: !hasPhoto
                     ? Text(
                         otherUserName[0].toUpperCase(),
                         style: const TextStyle(
@@ -647,23 +651,27 @@ class _DMChatScreenState extends State<DMChatScreen> {
           children: [
             // Avatar for other user
             if (!isOwnMessage) ...[
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: const Color(0xFF4A9EFF),
-                backgroundImage: message.senderPhotoURL != null
-                    ? NetworkImage(message.senderPhotoURL!)
-                    : null,
-                child: message.senderPhotoURL == null
-                    ? Text(
-                        message.senderName[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
-              ),
+              Builder(builder: (context) {
+                final senderPhoto = message.senderPhotoURL;
+                final hasSenderPhoto = senderPhoto != null && senderPhoto.isNotEmpty;
+                return CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFF4A9EFF),
+                  backgroundImage: hasSenderPhoto
+                      ? NetworkImage(senderPhoto)
+                      : null,
+                  child: !hasSenderPhoto
+                      ? Text(
+                          message.senderName[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                );
+              }),
               const SizedBox(width: 8),
             ],
 

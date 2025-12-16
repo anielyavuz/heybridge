@@ -233,13 +233,14 @@ class _NewDMScreenState extends State<NewDMScreen> {
   }
 
   Widget _buildMemberItem(UserModel user) {
+    final hasValidPhoto = user.photoURL != null && user.photoURL!.isNotEmpty;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: const Color(0xFF4A9EFF),
-        backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-        child: user.photoURL == null
+        backgroundImage: hasValidPhoto ? NetworkImage(user.photoURL!) : null,
+        child: !hasValidPhoto
             ? Text(
                 user.displayName[0].toUpperCase(),
                 style: const TextStyle(
