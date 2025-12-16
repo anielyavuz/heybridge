@@ -158,6 +158,10 @@ class FcmApiService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
+    _logger.info('Sending user notification', category: 'FCM_API', data: {
+      'userId': userId,
+      'title': title,
+    });
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
@@ -165,9 +169,12 @@ class FcmApiService {
         return false;
       }
 
+      final url = '$baseUrl/api/notify/user';
+      _logger.debug('POST request', category: 'FCM_API', data: {'url': url});
+
       final response = await http
           .post(
-            Uri.parse('$baseUrl/api/notify/user'),
+            Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'userId': userId,
@@ -178,6 +185,10 @@ class FcmApiService {
           )
           .timeout(_timeout);
 
+      _logger.info('User notification response', category: 'FCM_API', data: {
+        'statusCode': response.statusCode,
+        'body': response.body,
+      });
       return response.statusCode == 200;
     } catch (e) {
       _logger.error('Error sending user notification: $e', category: 'FCM_API');
@@ -192,6 +203,10 @@ class FcmApiService {
     required String body,
     Map<String, dynamic>? data,
   }) async {
+    _logger.info('Sending topic notification', category: 'FCM_API', data: {
+      'topic': topic,
+      'title': title,
+    });
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
@@ -199,9 +214,12 @@ class FcmApiService {
         return false;
       }
 
+      final url = '$baseUrl/api/notify/topic';
+      _logger.debug('POST request', category: 'FCM_API', data: {'url': url});
+
       final response = await http
           .post(
-            Uri.parse('$baseUrl/api/notify/topic'),
+            Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'topic': topic,
@@ -212,6 +230,10 @@ class FcmApiService {
           )
           .timeout(_timeout);
 
+      _logger.info('Topic notification response', category: 'FCM_API', data: {
+        'statusCode': response.statusCode,
+        'body': response.body,
+      });
       return response.statusCode == 200;
     } catch (e) {
       _logger.error('Error sending topic notification: $e', category: 'FCM_API');
@@ -221,17 +243,33 @@ class FcmApiService {
 
   /// Sağlık kontrolü
   Future<bool> healthCheck() async {
+    _logger.info('Performing FCM API health check', category: 'FCM_API');
     try {
       final baseUrl = await _getBaseUrl();
       if (baseUrl == null || baseUrl.isEmpty) {
+        _logger.error('FCM URL is null or empty for health check', category: 'FCM_API');
         return false;
       }
 
+      final url = '$baseUrl/health';
+      _logger.debug('GET request', category: 'FCM_API', data: {'url': url});
+
       final response = await http
-          .get(Uri.parse('$baseUrl/health'))
+          .get(Uri.parse(url))
           .timeout(_timeout);
 
-      return response.statusCode == 200;
+      final isHealthy = response.statusCode == 200;
+      if (isHealthy) {
+        _logger.success('FCM API health check passed', category: 'FCM_API', data: {
+          'statusCode': response.statusCode,
+        });
+      } else {
+        _logger.warning('FCM API health check failed', category: 'FCM_API', data: {
+          'statusCode': response.statusCode,
+          'body': response.body,
+        });
+      }
+      return isHealthy;
     } catch (e) {
       _logger.error('Health check failed: $e', category: 'FCM_API');
       return false;

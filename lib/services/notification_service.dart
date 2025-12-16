@@ -31,32 +31,43 @@ class NotificationService {
 
   /// Initialize the notification service
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      _logger.debug('NotificationService already initialized', category: 'FCM');
+      return;
+    }
+
+    _logger.info('Initializing NotificationService...', category: 'FCM');
 
     // Web'de sadece temel FCM işlevleri çalışır
     if (kIsWeb) {
+      _logger.info('Web platform detected, skipping native FCM setup', category: 'FCM');
       _isInitialized = true;
       return;
     }
 
     // Request permission
+    _logger.debug('Requesting notification permissions...', category: 'FCM');
     await _requestPermission();
 
     // Initialize local notifications
+    _logger.debug('Initializing local notifications...', category: 'FCM');
     await _initializeLocalNotifications();
 
     // Setup message handlers
+    _logger.debug('Setting up message handlers...', category: 'FCM');
     _setupMessageHandlers();
 
     // Get initial token
+    _logger.debug('Getting initial FCM token...', category: 'FCM');
     _currentToken = await getToken();
 
     _isInitialized = true;
+    _logger.success('NotificationService initialized successfully', category: 'FCM');
   }
 
   /// Request notification permissions
   Future<void> _requestPermission() async {
-    await _messaging.requestPermission(
+    final settings = await _messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -65,6 +76,11 @@ class NotificationService {
       provisional: false,
       sound: true,
     );
+    _logger.info('Permission status: ${settings.authorizationStatus}', category: 'FCM', data: {
+      'alert': settings.alert.name,
+      'badge': settings.badge.name,
+      'sound': settings.sound.name,
+    });
   }
 
   /// Initialize local notifications for foreground display
@@ -110,18 +126,29 @@ class NotificationService {
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
+    _logger.info('Notification tapped', category: 'FCM', data: {
+      'payload': response.payload,
+      'actionId': response.actionId,
+    });
     _handleNotificationNavigation(response.payload);
   }
 
   /// Parse payload and navigate to appropriate screen
   void _handleNotificationNavigation(String? payload) {
-    if (payload == null || payload.isEmpty) return;
+    if (payload == null || payload.isEmpty) {
+      _logger.debug('No payload to navigate', category: 'FCM');
+      return;
+    }
 
     try {
       final data = _parsePayloadString(payload);
-      if (data == null) return;
+      if (data == null) {
+        _logger.warning('Could not parse payload', category: 'FCM', data: {'payload': payload});
+        return;
+      }
 
       final type = data['type'];
+      _logger.info('Navigating from notification', category: 'FCM', data: {'type': type});
 
       if (type == 'channel_message') {
         NavigationService.instance.setPendingNavigation({
@@ -131,15 +158,20 @@ class NotificationService {
           'channelName': data['channelName'],
           'messageId': data['messageId'],
         });
+        _logger.debug('Set pending navigation to channel', category: 'FCM', data: {
+          'channelId': data['channelId'],
+          'channelName': data['channelName'],
+        });
       } else if (type == 'dm_message') {
         NavigationService.instance.setPendingNavigation({
           'type': 'dm_message',
           'dmId': data['dmId'],
           'messageId': data['messageId'],
         });
+        _logger.debug('Set pending navigation to DM', category: 'FCM', data: {'dmId': data['dmId']});
       }
     } catch (e) {
-      // Error parsing payload
+      _logger.error('Error parsing notification payload: $e', category: 'FCM');
     }
   }
 
@@ -179,11 +211,20 @@ class NotificationService {
 
   /// Handle foreground messages
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    _logger.info('Foreground message received', category: 'FCM', data: {
+      'title': message.notification?.title,
+      'body': message.notification?.body,
+      'data': message.data,
+    });
     await showLocalNotification(message);
   }
 
   /// Handle when app is opened from notification
   void _handleMessageOpenedApp(RemoteMessage message) {
+    _logger.info('App opened from notification (background)', category: 'FCM', data: {
+      'title': message.notification?.title,
+      'data': message.data,
+    });
     _handleRemoteMessageNavigation(message.data);
   }
 
@@ -191,6 +232,10 @@ class NotificationService {
   Future<void> _checkInitialMessage() async {
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
+      _logger.info('App launched from notification (terminated)', category: 'FCM', data: {
+        'title': initialMessage.notification?.title,
+        'data': initialMessage.data,
+      });
       _handleRemoteMessageNavigation(initialMessage.data);
     }
   }
@@ -221,10 +266,21 @@ class NotificationService {
   /// Show local notification
   Future<void> showLocalNotification(RemoteMessage message) async {
     // Skip on web - local notifications not supported
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _logger.debug('Skipping local notification on web', category: 'FCM');
+      return;
+    }
 
     final notification = message.notification;
-    if (notification == null) return;
+    if (notification == null) {
+      _logger.warning('No notification content in message', category: 'FCM');
+      return;
+    }
+
+    _logger.info('Showing local notification', category: 'FCM', data: {
+      'title': notification.title,
+      'body': notification.body,
+    });
 
     const androidDetails = AndroidNotificationDetails(
       'heybridge_messages',
@@ -255,6 +311,7 @@ class NotificationService {
       details,
       payload: message.data.toString(),
     );
+    _logger.success('Local notification displayed', category: 'FCM');
   }
 
   /// Get FCM token for current device
@@ -358,33 +415,52 @@ class NotificationService {
 
   /// Remove current device's FCM token from Firestore when user logs out
   Future<void> removeTokenFromFirestore(String userId) async {
+    _logger.info('Removing token from Firestore', category: 'FCM', data: {'userId': userId});
     try {
       final token = _currentToken ?? await getToken();
-      if (token == null) return;
+      if (token == null) {
+        _logger.warning('No token to remove', category: 'FCM');
+        return;
+      }
 
       final userDoc = await _firestore.collection('users').doc(userId).get();
 
-      if (!userDoc.exists || userDoc.data()?['fcmTokens'] == null) return;
+      if (!userDoc.exists || userDoc.data()?['fcmTokens'] == null) {
+        _logger.debug('No existing tokens to remove from', category: 'FCM');
+        return;
+      }
 
       List<Map<String, dynamic>> existingTokens =
           (userDoc.data()!['fcmTokens'] as List)
               .map((t) => Map<String, dynamic>.from(t))
               .toList();
 
+      final beforeCount = existingTokens.length;
       existingTokens.removeWhere((t) => t['token'] == token);
+      final afterCount = existingTokens.length;
 
       await _firestore.collection('users').doc(userId).update({
         'fcmTokens': existingTokens,
       });
+      _logger.success('Token removed from Firestore', category: 'FCM', data: {
+        'tokensRemoved': beforeCount - afterCount,
+        'remainingTokens': afterCount,
+      });
     } catch (e) {
-      // Error removing token
+      _logger.error('Error removing token: $e', category: 'FCM');
     }
   }
 
   /// Setup token refresh listener
   void setupTokenRefreshListener(String userId) {
+    _logger.info('Setting up token refresh listener', category: 'FCM', data: {'userId': userId});
     _messaging.onTokenRefresh.listen((newToken) async {
+      _logger.info('Token refresh detected', category: 'FCM', data: {
+        'hasOldToken': _currentToken != null,
+        'newTokenPrefix': newToken.substring(0, 20),
+      });
       if (_currentToken != null && _currentToken != newToken) {
+        _logger.debug('Removing old token before saving new one', category: 'FCM');
         await _removeSpecificToken(userId, _currentToken!);
       }
 
@@ -395,10 +471,17 @@ class NotificationService {
 
   /// Remove a specific token from user's token list
   Future<void> _removeSpecificToken(String userId, String token) async {
+    _logger.debug('Removing specific token', category: 'FCM', data: {
+      'userId': userId,
+      'tokenPrefix': token.length > 20 ? token.substring(0, 20) : token,
+    });
     try {
       final userDoc = await _firestore.collection('users').doc(userId).get();
 
-      if (!userDoc.exists || userDoc.data()?['fcmTokens'] == null) return;
+      if (!userDoc.exists || userDoc.data()?['fcmTokens'] == null) {
+        _logger.debug('No tokens found to remove', category: 'FCM');
+        return;
+      }
 
       List<Map<String, dynamic>> existingTokens =
           (userDoc.data()!['fcmTokens'] as List)
@@ -410,8 +493,9 @@ class NotificationService {
       await _firestore.collection('users').doc(userId).update({
         'fcmTokens': existingTokens,
       });
+      _logger.success('Specific token removed', category: 'FCM');
     } catch (e) {
-      // Error removing specific token
+      _logger.error('Error removing specific token: $e', category: 'FCM');
     }
   }
 
@@ -420,35 +504,47 @@ class NotificationService {
   /// Enable/disable notifications for a specific channel
   Future<void> setChannelNotification(
       String userId, String channelId, bool enabled) async {
+    _logger.debug('Setting channel notification', category: 'FCM', data: {
+      'channelId': channelId,
+      'enabled': enabled,
+    });
     try {
       await _firestore.collection('users').doc(userId).set({
         'channelNotifications': {channelId: enabled},
       }, SetOptions(merge: true));
+      _logger.success('Channel notification setting saved', category: 'FCM');
     } catch (e) {
-      // Error setting channel notification
+      _logger.error('Error setting channel notification: $e', category: 'FCM');
     }
   }
 
   /// Enable/disable notifications for a specific DM
   Future<void> setDMNotification(
       String userId, String dmId, bool enabled) async {
+    _logger.debug('Setting DM notification', category: 'FCM', data: {
+      'dmId': dmId,
+      'enabled': enabled,
+    });
     try {
       await _firestore.collection('users').doc(userId).set({
         'dmNotifications': {dmId: enabled},
       }, SetOptions(merge: true));
+      _logger.success('DM notification setting saved', category: 'FCM');
     } catch (e) {
-      // Error setting DM notification
+      _logger.error('Error setting DM notification: $e', category: 'FCM');
     }
   }
 
   /// Enable/disable all notifications globally
   Future<void> setGlobalNotifications(String userId, bool enabled) async {
+    _logger.info('Setting global notifications', category: 'FCM', data: {'enabled': enabled});
     try {
       await _firestore.collection('users').doc(userId).update({
         'globalNotificationsEnabled': enabled,
       });
+      _logger.success('Global notification setting saved', category: 'FCM');
     } catch (e) {
-      // Error setting global notifications
+      _logger.error('Error setting global notifications: $e', category: 'FCM');
     }
   }
 
@@ -458,8 +554,9 @@ class NotificationService {
   Future<void> subscribeToTopic(String topic) async {
     try {
       await _messaging.subscribeToTopic(topic);
+      _logger.debug('Subscribed to topic: $topic', category: 'FCM');
     } catch (e) {
-      // Error subscribing to topic
+      _logger.error('Error subscribing to topic $topic: $e', category: 'FCM');
     }
   }
 
@@ -467,8 +564,9 @@ class NotificationService {
   Future<void> unsubscribeFromTopic(String topic) async {
     try {
       await _messaging.unsubscribeFromTopic(topic);
+      _logger.debug('Unsubscribed from topic: $topic', category: 'FCM');
     } catch (e) {
-      // Error unsubscribing from topic
+      _logger.error('Error unsubscribing from topic $topic: $e', category: 'FCM');
     }
   }
 
@@ -517,10 +615,15 @@ class NotificationService {
 
   /// Sync all channel subscriptions for a user based on their workspaces
   Future<void> syncAllSubscriptions(String userId, List<String> workspaceIds) async {
+    _logger.info('Syncing all subscriptions', category: 'FCM', data: {
+      'userId': userId,
+      'workspaceCount': workspaceIds.length,
+    });
     try {
       // Subscribe to user's personal topic
       await subscribeToUserTopic(userId);
 
+      int channelCount = 0;
       // Subscribe to all workspaces
       for (final workspaceId in workspaceIds) {
         await subscribeToWorkspace(workspaceId);
@@ -534,6 +637,7 @@ class NotificationService {
 
         for (final channelDoc in channelsSnapshot.docs) {
           await subscribeToChannel(workspaceId, channelDoc.id);
+          channelCount++;
         }
       }
 
@@ -546,8 +650,14 @@ class NotificationService {
       for (final dmDoc in dmsSnapshot.docs) {
         await subscribeToDM(dmDoc.id);
       }
+
+      _logger.success('All subscriptions synced', category: 'FCM', data: {
+        'workspaces': workspaceIds.length,
+        'channels': channelCount,
+        'dms': dmsSnapshot.docs.length,
+      });
     } catch (e) {
-      // Error syncing subscriptions
+      _logger.error('Error syncing subscriptions: $e', category: 'FCM');
     }
   }
 }
