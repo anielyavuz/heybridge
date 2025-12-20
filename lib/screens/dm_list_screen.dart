@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/workspace_model.dart';
@@ -28,10 +29,20 @@ class _DMListScreenState extends State<DMListScreen> {
   final _firestoreService = FirestoreService();
   final _logger = LoggerService();
 
+  // Timer for periodic refresh of online status
+  Timer? _refreshTimer;
+
+  // Counter to force StreamBuilder rebuild for online status recalculation
+  int _refreshCounter = 0;
+
   /// Check if user is online (isOnline flag OR lastSeen within 1 minute)
   bool _isUserOnline(UserModel? user) {
-    if (user == null) return false;
-    if (user.isOnline) return true;
+    if (user == null) {
+      return false;
+    }
+    if (user.isOnline) {
+      return true;
+    }
     final now = DateTime.now();
     final difference = now.difference(user.lastSeen);
     return difference.inMinutes < 1;
@@ -43,6 +54,21 @@ class _DMListScreenState extends State<DMListScreen> {
     _logger.logUI('DMListScreen', 'screen_opened',
       data: {'workspaceId': widget.workspace.id}
     );
+
+    // Refresh every 30 seconds to update online status based on lastSeen
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        setState(() {
+          _refreshCounter++;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   String _getOtherParticipantId(List<String> participantIds) {
@@ -192,7 +218,9 @@ class _DMListScreenState extends State<DMListScreen> {
     final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
 
     // Use StreamBuilder for real-time online status updates
+    // Key includes refreshCounter to force rebuild when timer triggers
     return StreamBuilder<UserModel?>(
+      key: ValueKey('dm_user_${otherParticipantId}_$_refreshCounter'),
       stream: _firestoreService.getUserStream(otherParticipantId),
       builder: (context, userSnapshot) {
         final otherUser = userSnapshot.data;
@@ -332,7 +360,7 @@ class _DMListScreenState extends State<DMListScreen> {
     final difference = now.difference(dateTime);
 
     if (difference.inDays == 0) {
-      return DateFormat('h:mm a').format(dateTime);
+      return DateFormat('HH:mm').format(dateTime);
     } else if (difference.inDays == 1) {
       return 'Yesterday';
     } else if (difference.inDays < 7) {

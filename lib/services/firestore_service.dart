@@ -126,7 +126,7 @@ class FirestoreService {
     try {
       await _firestore.collection('users').doc(uid).update({
         'isOnline': isOnline,
-        'lastSeen': DateTime.now().toIso8601String(),
+        'lastSeen': FieldValue.serverTimestamp(),
       });
 
       _logger.logFirestore('update_presence', success: true, collection: 'users');

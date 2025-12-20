@@ -102,15 +102,31 @@ class PresenceService with WidgetsBindingObserver {
   /// Set user as online
   Future<void> _setOnline() async {
     final userId = _authService.currentUser?.uid;
-    if (userId == null) return;
+    if (userId == null) {
+      _logger.log('Cannot set online - no user logged in',
+        category: 'PRESENCE',
+        level: LogLevel.warning
+      );
+      return;
+    }
 
     try {
+      _logger.log('Setting user online',
+        category: 'PRESENCE',
+        level: LogLevel.debug,
+        data: {'userId': userId}
+      );
       await _firestoreService.updatePresence(userId, true);
+      _logger.log('User set online successfully',
+        category: 'PRESENCE',
+        level: LogLevel.info,
+        data: {'userId': userId}
+      );
     } catch (e) {
       _logger.log('Failed to set online',
         category: 'PRESENCE',
         level: LogLevel.error,
-        data: {'error': e.toString()}
+        data: {'userId': userId, 'error': e.toString()}
       );
     }
   }
@@ -139,6 +155,12 @@ class PresenceService with WidgetsBindingObserver {
 
   /// Manually set online (e.g., on login)
   Future<void> goOnline() async {
+    _logger.log('goOnline called',
+      category: 'PRESENCE',
+      level: LogLevel.info
+    );
     init();
+    // Always set online immediately when goOnline is called
+    await _setOnline();
   }
 }

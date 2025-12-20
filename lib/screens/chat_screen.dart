@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:http/http.dart' as http;
 import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
 import '../models/message_model.dart';
@@ -12,6 +14,8 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/channel_service.dart';
 import '../services/workspace_service.dart';
+import '../services/webhook_service.dart';
+import '../models/webhook_model.dart';
 import 'channel_settings_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -118,6 +122,15 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final messageText = _messageController.text.trim();
       _messageController.clear();
+
+      // Check for @notion command
+      if (messageText.toLowerCase().startsWith('@notion ')) {
+        final taskText = messageText.substring(8).trim(); // Remove "@notion " prefix
+        if (taskText.isNotEmpty) {
+          await _sendNotionTask(taskText, userId);
+          return;
+        }
+      }
 
       // Check if we're editing or sending new message
       if (_editingMessage != null) {
@@ -240,6 +253,76 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Send task to Notion via backend API
+  Future<void> _sendNotionTask(String taskText, String userId) async {
+    try {
+      _logger.log(
+        'Sending Notion task',
+        category: 'NOTION',
+        data: {'taskText': taskText, 'channelId': widget.channel.id},
+      );
+
+      // Get user name
+      String userName = _authService.currentUser?.displayName ?? '';
+      if (userName.isEmpty) {
+        final userDoc = await _firestoreService.getUser(userId);
+        userName = userDoc?.displayName ??
+            _authService.currentUser?.email?.split('@')[0] ??
+            'User';
+      }
+
+      final response = await http.post(
+        Uri.parse('https://heybridgeservice-11767898554.europe-west1.run.app/api/notion/channel'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'workspaceId': widget.workspace.id,
+          'channelId': widget.channel.id,
+          'senderId': userId,
+          'senderName': userName,
+          'task_text': taskText,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final result = jsonDecode(response.body);
+        _logger.log(
+          'Notion task created successfully',
+          level: LogLevel.success,
+          category: 'NOTION',
+          data: {'shortId': result['shortId'], 'taskName': result['taskName']},
+        );
+      } else {
+        throw Exception('Failed to create Notion task: ${response.body}');
+      }
+
+      // Scroll to bottom to see the confirmation message
+      if (_scrollController.hasClients) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (e) {
+      _logger.log(
+        'Failed to send Notion task',
+        level: LogLevel.error,
+        category: 'NOTION',
+        data: {'error': e.toString()},
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notion task gönderilemedi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -292,6 +375,11 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.add, color: Colors.white70),
+            tooltip: 'Webhook Ekle',
+            onPressed: () => _showWebhookDialog(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.info_outline, color: Colors.white70),
             onPressed: () {
               _logger.logUI(
@@ -311,11 +399,13 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Messages Area
-          Expanded(
-            child: StreamBuilder<List<MessageModel>>(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Column(
+          children: [
+            // Messages Area
+            Expanded(
+              child: StreamBuilder<List<MessageModel>>(
               stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -550,6 +640,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             style: const TextStyle(color: Colors.white),
                             maxLines: null,
                             textInputAction: TextInputAction.newline,
+                            textCapitalization: TextCapitalization.sentences,
                             onTap: () {
                               if (_showEmojiPicker) {
                                 setState(() => _showEmojiPicker = false);
@@ -629,9 +720,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1302,6 +1394,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           // Message text
                           Text(
                             message.text,
+                            textAlign: TextAlign.start,
                             style: TextStyle(
                               color: message.isDeleted
                                   ? Colors.white.withValues(alpha: 0.6)
@@ -1338,7 +1431,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 const SizedBox(width: 4),
                               ],
                               Text(
-                                DateFormat('h:mm a').format(message.createdAt),
+                                DateFormat('HH:mm').format(message.createdAt),
                                 style: TextStyle(
                                   color: isOwnMessage
                                       ? Colors.white.withValues(alpha: 0.8)
@@ -1526,5 +1619,379 @@ class _ChatScreenState extends State<ChatScreen> {
           color: const Color(0xFF34B7F1), // WhatsApp blue tick color
         );
     }
+  }
+
+  // Webhook dialog
+  void _showWebhookDialog(BuildContext context) {
+    final webhookService = WebhookService();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (bottomSheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF2D3748),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white38,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Webhooks',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle, color: Color(0xFF4A9EFF), size: 28),
+                          onPressed: () => _showAddWebhookDialog(bottomSheetContext),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(color: Colors.white24, height: 1),
+                  // Webhook list
+                  Expanded(
+                    child: StreamBuilder<List<WebhookModel>>(
+                      stream: webhookService.getChannelWebhooksStream(
+                        channelId: widget.channel.id,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(color: Color(0xFF4A9EFF)),
+                          );
+                        }
+
+                        final webhooks = snapshot.data ?? [];
+
+                        if (webhooks.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.webhook,
+                                  size: 64,
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'Henüz webhook yok',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Dış servislerden mesaj almak için\nbir webhook ekleyin',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ListView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: webhooks.length,
+                          itemBuilder: (context, index) {
+                            final webhook = webhooks[index];
+                            return _buildWebhookCard(webhook, webhookService);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWebhookCard(WebhookModel webhook, WebhookService webhookService) {
+    return Card(
+      color: const Color(0xFF1A1D21),
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: webhook.isActive
+                        ? const Color(0xFF22C55E).withValues(alpha: 0.2)
+                        : Colors.grey.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.webhook,
+                    color: webhook.isActive ? const Color(0xFF22C55E) : Colors.grey,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        webhook.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        webhook.isActive ? 'Aktif' : 'Pasif',
+                        style: TextStyle(
+                          color: webhook.isActive ? const Color(0xFF22C55E) : Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Toggle switch
+                Switch(
+                  value: webhook.isActive,
+                  activeColor: const Color(0xFF22C55E),
+                  onChanged: (value) async {
+                    await webhookService.toggleWebhookStatus(
+                      webhookId: webhook.id,
+                      isActive: value,
+                    );
+                  },
+                ),
+                // Delete button
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  onPressed: () => _confirmDeleteWebhook(webhook, webhookService),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // URL section
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D3748),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      webhook.webhookUrl,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.copy, color: Color(0xFF4A9EFF), size: 20),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: webhook.webhookUrl));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Webhook URL kopyalandı'),
+                          backgroundColor: Color(0xFF22C55E),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Usage info
+            Text(
+              'POST isteği ile mesaj gönderin:\n{"text": "Mesajınız"}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddWebhookDialog(BuildContext parentContext) {
+    final nameController = TextEditingController();
+    final webhookService = WebhookService();
+
+    showDialog(
+      context: parentContext,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D3748),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Yeni Webhook',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Webhook adı (örn: GitHub, Jenkins)',
+              hintStyle: const TextStyle(color: Colors.white38),
+              filled: true,
+              fillColor: const Color(0xFF1A1D21),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('İptal', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A9EFF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Webhook adı boş olamaz'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  final userId = _authService.currentUser?.uid;
+                  if (userId == null) return;
+
+                  await webhookService.createWebhook(
+                    name: name,
+                    channelId: widget.channel.id,
+                    workspaceId: widget.workspace.id,
+                    createdBy: userId,
+                  );
+
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+
+                  if (parentContext.mounted) {
+                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('Webhook oluşturuldu'),
+                        backgroundColor: Color(0xFF22C55E),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (parentContext.mounted) {
+                    ScaffoldMessenger.of(parentContext).showSnackBar(
+                      SnackBar(
+                        content: Text('Hata: $e'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Oluştur', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteWebhook(WebhookModel webhook, WebhookService webhookService) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D3748),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Webhook\'u Sil',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            '"${webhook.name}" webhook\'unu silmek istediğinize emin misiniz?',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('İptal', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                await webhookService.deleteWebhook(webhook.id);
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              child: const Text('Sil', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

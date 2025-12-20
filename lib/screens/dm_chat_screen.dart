@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:http/http.dart' as http;
 import '../models/workspace_model.dart';
 import '../models/direct_message_model.dart';
 import '../models/message_model.dart';
@@ -138,6 +140,15 @@ class _DMChatScreenState extends State<DMChatScreen> {
       final messageText = _messageController.text.trim();
       _messageController.clear();
 
+      // Check for @notion command
+      if (messageText.toLowerCase().startsWith('@notion ')) {
+        final taskText = messageText.substring(8).trim(); // Remove "@notion " prefix
+        if (taskText.isNotEmpty) {
+          await _sendNotionTask(taskText, userId);
+          return;
+        }
+      }
+
       if (_editingMessage != null) {
         // Edit existing message
         final editingMessageId = _editingMessage!.id;
@@ -239,6 +250,76 @@ class _DMChatScreenState extends State<DMChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send message: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Send task to Notion via backend API
+  Future<void> _sendNotionTask(String taskText, String userId) async {
+    try {
+      _logger.log(
+        'Sending Notion task from DM',
+        category: 'NOTION',
+        data: {'taskText': taskText, 'dmId': widget.dm.id},
+      );
+
+      // Get user name
+      String userName = _authService.currentUser?.displayName ?? '';
+      if (userName.isEmpty) {
+        final userDoc = await _firestoreService.getUser(userId);
+        userName = userDoc?.displayName ??
+            _authService.currentUser?.email?.split('@')[0] ??
+            'User';
+      }
+
+      final response = await http.post(
+        Uri.parse('https://heybridgeservice-11767898554.europe-west1.run.app/api/notion/dm'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'workspaceId': widget.workspace.id,
+          'dmId': widget.dm.id,
+          'senderId': userId,
+          'senderName': userName,
+          'task_text': taskText,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final result = jsonDecode(response.body);
+        _logger.log(
+          'Notion task created successfully from DM',
+          level: LogLevel.success,
+          category: 'NOTION',
+          data: {'shortId': result['shortId'], 'taskName': result['taskName']},
+        );
+      } else {
+        throw Exception('Failed to create Notion task: ${response.body}');
+      }
+
+      // Scroll to bottom to see the confirmation message
+      if (_scrollController.hasClients) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    } catch (e) {
+      _logger.log(
+        'Failed to send Notion task from DM',
+        level: LogLevel.error,
+        category: 'NOTION',
+        data: {'error': e.toString()},
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Notion task gönderilemedi: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -437,11 +518,13 @@ class _DMChatScreenState extends State<DMChatScreen> {
           },
         ),
       ),
-      body: Column(
-        children: [
-          // Messages Area
-          Expanded(
-            child: StreamBuilder<List<MessageModel>>(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Column(
+          children: [
+            // Messages Area
+            Expanded(
+              child: StreamBuilder<List<MessageModel>>(
               stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -485,11 +568,12 @@ class _DMChatScreenState extends State<DMChatScreen> {
                 );
               },
             ),
-          ),
+            ),
 
-          // Message Input Area (same as ChatScreen)
-          _buildMessageInput(),
-        ],
+            // Message Input Area (same as ChatScreen)
+            _buildMessageInput(),
+          ],
+        ),
       ),
     );
   }
@@ -753,6 +837,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
                       // Message text
                       Text(
                         message.text,
+                        textAlign: TextAlign.start,
                         style: TextStyle(
                           color: message.isDeleted
                               ? Colors.white.withValues(alpha: 0.6)
@@ -770,7 +855,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            DateFormat('h:mm a').format(message.createdAt),
+                            DateFormat('HH:mm').format(message.createdAt),
                             style: TextStyle(
                               color: isOwnMessage
                                   ? Colors.white.withValues(alpha: 0.8)
@@ -1029,6 +1114,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
                       style: const TextStyle(color: Colors.white),
                       maxLines: null,
                       textInputAction: TextInputAction.newline,
+                      textCapitalization: TextCapitalization.sentences,
                       onTap: () {
                         if (_showEmojiPicker) {
                           setState(() => _showEmojiPicker = false);

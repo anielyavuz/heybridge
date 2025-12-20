@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'navigation_service.dart';
 import 'logger_service.dart';
+import '../widgets/in_app_notification.dart';
 
 // Conditional import for Platform
 import 'platform_stub.dart' if (dart.library.io) 'dart:io';
@@ -61,8 +62,56 @@ class NotificationService {
     _logger.debug('Getting initial FCM token...', category: 'FCM');
     _currentToken = await getToken();
 
+    // Clear badge on app launch
+    await clearBadge();
+
     _isInitialized = true;
     _logger.success('NotificationService initialized successfully', category: 'FCM');
+  }
+
+  /// Clear app badge count
+  Future<void> clearBadge() async {
+    if (kIsWeb) return;
+
+    try {
+      // iOS: Clear badge by showing a notification with badge 0, then canceling
+      if (Platform.isIOS) {
+        final iosPlugin = _localNotifications
+            .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+
+        if (iosPlugin != null) {
+          // Cancel all notifications first
+          await _localNotifications.cancelAll();
+
+          // Show a silent notification with badge 0 to reset the badge
+          const iosDetails = DarwinNotificationDetails(
+            presentAlert: false,
+            presentBadge: true,
+            presentSound: false,
+            badgeNumber: 0,
+          );
+
+          await _localNotifications.show(
+            999999, // Special ID for badge reset
+            '',
+            '',
+            const NotificationDetails(iOS: iosDetails),
+          );
+
+          // Immediately cancel it
+          await _localNotifications.cancel(999999);
+        }
+      }
+
+      // Android: Cancel all notifications
+      if (Platform.isAndroid) {
+        await _localNotifications.cancelAll();
+      }
+
+      _logger.debug('Badge cleared', category: 'FCM');
+    } catch (e) {
+      _logger.error('Error clearing badge: $e', category: 'FCM');
+    }
   }
 
   /// Request notification permissions
@@ -165,10 +214,14 @@ class NotificationService {
       } else if (type == 'dm_message') {
         NavigationService.instance.setPendingNavigation({
           'type': 'dm_message',
+          'workspaceId': data['workspaceId'],
           'dmId': data['dmId'],
           'messageId': data['messageId'],
         });
-        _logger.debug('Set pending navigation to DM', category: 'FCM', data: {'dmId': data['dmId']});
+        _logger.debug('Set pending navigation to DM', category: 'FCM', data: {
+          'workspaceId': data['workspaceId'],
+          'dmId': data['dmId'],
+        });
       }
     } catch (e) {
       _logger.error('Error parsing notification payload: $e', category: 'FCM');
@@ -216,7 +269,62 @@ class NotificationService {
       'body': message.notification?.body,
       'data': message.data,
     });
-    await showLocalNotification(message);
+
+    // Show in-app notification banner (WhatsApp style)
+    _showInAppNotification(message);
+  }
+
+  /// Show in-app notification banner when app is in foreground
+  void _showInAppNotification(RemoteMessage message) {
+    final context = NavigationService.instance.navigatorKey.currentContext;
+    if (context == null) {
+      _logger.warning('No context available for in-app notification', category: 'FCM');
+      return;
+    }
+
+    final notification = message.notification;
+    final data = message.data;
+
+    final title = notification?.title ?? 'HeyBridge';
+    final body = notification?.body ?? '';
+
+    InAppNotification.show(
+      context: context,
+      title: title,
+      body: body,
+      onTap: () {
+        _logger.info('In-app notification tapped', category: 'FCM');
+        _handleRemoteMessageNavigation(data);
+
+        // Navigate immediately if we have context
+        _navigateFromNotification(data);
+      },
+    );
+  }
+
+  /// Navigate to the appropriate screen from notification data
+  void _navigateFromNotification(Map<String, dynamic> data) {
+    final type = data['type'];
+    final workspaceId = data['workspaceId'];
+
+    if (type == null || workspaceId == null) return;
+
+    final navigatorState = NavigationService.instance.navigatorKey.currentState;
+    if (navigatorState == null) return;
+
+    // For now, just set pending navigation and let the current screen handle it
+    // A more sophisticated implementation would navigate directly
+    NavigationService.instance.setPendingNavigation({
+      'type': type,
+      'workspaceId': workspaceId,
+      'channelId': data['channelId'],
+      'channelName': data['channelName'],
+      'dmId': data['dmId'],
+      'messageId': data['messageId'],
+    });
+
+    // Pop to root and rebuild to trigger navigation check
+    navigatorState.popUntil((route) => route.isFirst);
   }
 
   /// Handle when app is opened from notification
@@ -225,7 +333,33 @@ class NotificationService {
       'title': message.notification?.title,
       'data': message.data,
     });
+
+    // Clear badge when notification is tapped
+    clearBadge();
+
     _handleRemoteMessageNavigation(message.data);
+
+    // Trigger navigation after a short delay to ensure context is ready
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _triggerPendingNavigation();
+    });
+  }
+
+  /// Trigger pending navigation if navigator is ready
+  void _triggerPendingNavigation({int retryCount = 0}) {
+    // Notify listeners (ChannelListScreen) to check for pending navigation
+    NavigationService.instance.notifyNavigationListeners();
+
+    // If pending navigation still exists after notification, retry
+    // This handles the case where ChannelListScreen hasn't mounted yet
+    if (retryCount < 5) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (NavigationService.instance.peekPendingNavigation() != null) {
+          _logger.debug('Retrying navigation trigger (attempt ${retryCount + 1})', category: 'FCM');
+          _triggerPendingNavigation(retryCount: retryCount + 1);
+        }
+      });
+    }
   }
 
   /// Check if app was launched from a notification
@@ -236,7 +370,16 @@ class NotificationService {
         'title': initialMessage.notification?.title,
         'data': initialMessage.data,
       });
+
+      // Clear badge
+      clearBadge();
+
       _handleRemoteMessageNavigation(initialMessage.data);
+
+      // Trigger navigation after app is fully loaded
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        _triggerPendingNavigation();
+      });
     }
   }
 
@@ -257,6 +400,7 @@ class NotificationService {
     } else if (type == 'dm_message') {
       NavigationService.instance.setPendingNavigation({
         'type': 'dm_message',
+        'workspaceId': data['workspaceId'],
         'dmId': data['dmId'],
         'messageId': data['messageId'],
       });

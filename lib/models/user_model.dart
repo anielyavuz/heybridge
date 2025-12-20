@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class UserModel {
   final String uid;
   final String email;
@@ -35,6 +37,14 @@ class UserModel {
     };
   }
 
+  /// Parse DateTime from various formats (Timestamp, String, or null)
+  static DateTime _parseDateTime(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
+
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       uid: map['uid'] ?? '',
@@ -42,8 +52,8 @@ class UserModel {
       displayName: map['displayName'] ?? '',
       photoURL: map['photoURL'],
       avatarId: map['avatarId'],
-      createdAt: DateTime.parse(map['createdAt']),
-      lastSeen: DateTime.parse(map['lastSeen']),
+      createdAt: _parseDateTime(map['createdAt']),
+      lastSeen: _parseDateTime(map['lastSeen']),
       isOnline: map['isOnline'] ?? false,
       workspaceIds: List<String>.from(map['workspaceIds'] ?? []),
     );

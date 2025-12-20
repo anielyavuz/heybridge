@@ -139,5 +139,19 @@ service cloud.firestore {
         }
       }
     }
+
+    // Webhooks collection (global, for easy lookup by webhook ID)
+    match /webhooks/{webhookId} {
+      // Any authenticated user can read webhooks (query filtering done client-side)
+      allow read: if isSignedIn();
+
+      // Authenticated users can create webhooks
+      allow create: if isSignedIn() &&
+                       request.auth.uid == request.resource.data.createdBy;
+
+      // Webhook creator can update/delete
+      allow update, delete: if isSignedIn() &&
+                               request.auth.uid == resource.data.createdBy;
+    }
   }
 }

@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.heybridge</string>
+	<string>com.heybridge.app</string>
 	<key>PROJECT_ID</key>
 	<string>heybridge-5f6ed</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:132972912332:ios:72b79a90b49c91d0ba2c69</string>
+	<string>1:132972912332:ios:af1183f766533327ba2c69</string>
 </dict>
 </plist>

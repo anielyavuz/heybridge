@@ -1,0 +1,1024 @@
+HEYBRIDGE - DM VOICE CHANNEL IMPLEMENTATION ROADMAP
+====================================================
+
+PROJECT CONTEXT
+---------------
+HeyBridge is a Slack-like messaging app built with Flutter + Firebase.
+Goal: Add voice channel feature to Direct Messages - users join a shared voice "room" rather than traditional call flow
+Concept: Like Discord/Slack voice channels - both users see a "Join Voice" button in their DM, creating a persistent voice space
+Stack: Flutter (frontend), Firebase (Firestore + Cloud Functions), flutter_webrtc package
+
+WHY VOICE CHANNEL INSTEAD OF TRADITIONAL CALLS?
+------------------------------------------------
+- More casual, less intrusive (no ringing/notification spam)
+- Users join when ready, no "answering" needed
+- Better UX for messaging apps (Slack/Discord pattern)
+- Persistent room state - can see who's in voice
+- Simpler state management
+
+WHY MESH FOR 2 PEOPLE?
+----------------------
+- No media server needed (Mediasoup/SFU not required)
+- Direct peer-to-peer connection
+- Zero server costs beyond Firebase
+- Simple implementation (2-3 weeks vs 4-6 weeks for SFU)
+- Firebase handles signaling only
+
+ARCHITECTURE OVERVIEW
+---------------------
+[User A] ─┐
+          ├─> [Voice Channel (DM-based)] <─> Firebase Firestore
+[User B] ─┘         (WebRTC P2P Audio)         (Signaling + State)
+
+================================================================================
+PHASE 1: FIREBASE BACKEND SETUP (Week 1, Days 1-2)
+================================================================================
+
+1.1 FIRESTORE SCHEMA DESIGN
+----------------------------
+Create the following Firestore structure:
+
+Collection: /dm_channels/{channelId}
+  Fields:
+    - channelId: string (same as DM conversation ID)
+    - participants: array [userId1, userId2]
+    - createdAt: timestamp
+    - lastUsedAt: timestamp
+
+Collection: /dm_channels/{channelId}/voice_sessions/{sessionId}
+  Fields:
+    - sessionId: string (auto-generated)
+    - activeParticipants: array [userId] (who's currently in voice)
+    - status: string ('active', 'ended')
+    - createdAt: timestamp
+    - endedAt: timestamp (nullable)
+    - duration: number (seconds, nullable)
+
+Collection: /dm_channels/{channelId}/voice_sessions/{sessionId}/signaling/{docId}
+  Fields:
+    - type: string ('offer', 'answer', 'ice-candidate', 'leave')
+    - from: string (userId)
+    - to: string (userId)
+    - data: map (SDP or ICE candidate data)
+    - timestamp: timestamp
+
+Collection: /dm_channels/{channelId}/voice_sessions/{sessionId}/monitoring/{docId}
+  Fields:
+    - userId: string
+    - timestamp: timestamp
+    - metrics: map {
+        bandwidthKbps: number,
+        packetLossPercent: number,
+        roundTripTime: number,
+        jitter: number,
+        audioLevel: number
+      }
+
+1.2 FIRESTORE SECURITY RULES
+-----------------------------
+Create file: firestore_voice_channel.rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // DM Voice Channels
+    match /dm_channels/{channelId} {
+      // Users can read their own DM channels
+      allow read: if request.auth != null && 
+                     request.auth.uid in resource.data.participants;
+      
+      // Users can create/update their DM channel
+      allow create, update: if request.auth != null && 
+                              request.auth.uid in request.resource.data.participants;
+      
+      // Voice Sessions sub-collection
+      match /voice_sessions/{sessionId} {
+        // Can read if you're a participant in the parent channel
+        allow read: if request.auth != null && 
+                       request.auth.uid in get(/databases/$(database)/documents/dm_channels/$(channelId)).data.participants;
+        
+        // Can create session if you're a participant
+        allow create: if request.auth != null && 
+                         request.auth.uid in get(/databases/$(database)/documents/dm_channels/$(channelId)).data.participants;
+        
+        // Can update session if you're in activeParticipants (to add/remove yourself)
+        allow update: if request.auth != null && 
+                         (request.auth.uid in resource.data.activeParticipants ||
+                          request.auth.uid in request.resource.data.activeParticipants);
+        
+        // Signaling sub-collection
+        match /signaling/{signalingId} {
+          // Can read if you're the recipient
+          allow read: if request.auth != null && 
+                         request.auth.uid == resource.data.to;
+          
+          // Can write if you're the sender and a channel participant
+          allow create: if request.auth != null && 
+                           request.auth.uid == request.resource.data.from &&
+                           request.auth.uid in get(/databases/$(database)/documents/dm_channels/$(channelId)).data.participants;
+          
+          // Can delete your own signals after processing
+          allow delete: if request.auth != null && 
+                           request.auth.uid == resource.data.to;
+        }
+        
+        // Monitoring sub-collection
+        match /monitoring/{monitoringId} {
+          allow read: if request.auth != null && 
+                         request.auth.uid in get(/databases/$(database)/documents/dm_channels/$(channelId)).data.participants;
+          allow create: if request.auth != null && 
+                           request.auth.uid == request.resource.data.userId;
+        }
+      }
+    }
+  }
+}
+
+1.3 CLOUD FUNCTIONS (Optional but Recommended)
+-----------------------------------------------
+Create file: functions/src/voiceChannels.ts
+
+Purpose: Handle voice channel lifecycle events
+- Clean up old signaling documents
+- Calculate session duration on end
+- Update DM channel lastUsedAt
+- Log analytics
+
+Example Cloud Function:
+
+exports.onVoiceSessionCreated = functions.firestore
+  .document('dm_channels/{channelId}/voice_sessions/{sessionId}')
+  .onCreate(async (snap, context) => {
+    const session = snap.data();
+    
+    // Update parent channel's lastUsedAt
+    await admin.firestore()
+      .collection('dm_channels')
+      .doc(context.params.channelId)
+      .update({
+        lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+  });
+
+exports.onVoiceSessionEnded = functions.firestore
+  .document('dm_channels/{channelId}/voice_sessions/{sessionId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    
+    if (before.status !== 'ended' && after.status === 'ended') {
+      // Calculate duration
+      const duration = after.endedAt.seconds - after.createdAt.seconds;
+      
+      // Update session with duration
+      await change.after.ref.update({ duration });
+      
+      // Clean up signaling documents after 5 minutes
+      setTimeout(async () => {
+        const signals = await change.after.ref.collection('signaling').get();
+        const batch = admin.firestore().batch();
+        signals.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+      }, 5 * 60 * 1000);
+    }
+  });
+
+exports.cleanupOldSessions = functions.pubsub
+  .schedule('every 24 hours')
+  .onRun(async (context) => {
+    // Delete voice sessions older than 7 days
+    const cutoff = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    );
+    
+    const snapshot = await admin.firestore()
+      .collectionGroup('voice_sessions')
+      .where('endedAt', '<', cutoff)
+      .get();
+    
+    const batch = admin.firestore().batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  });
+
+================================================================================
+PHASE 2: FLUTTER DEPENDENCIES & PERMISSIONS (Week 1, Day 3)
+================================================================================
+
+2.1 UPDATE PUBSPEC.YAML
+------------------------
+Add these dependencies:
+
+dependencies:
+  flutter_webrtc: ^0.9.48
+  cloud_firestore: ^4.15.0
+  firebase_auth: ^4.17.0
+  provider: ^6.1.1
+  permission_handler: ^11.2.0
+  audioplayers: ^5.2.1  # For ringtone
+  flutter_local_notifications: ^16.3.0  # For incoming call UI
+
+2.2 ANDROID PERMISSIONS
+------------------------
+Update: android/app/src/main/AndroidManifest.xml
+
+<manifest>
+  <!-- Add before <application> tag -->
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.BLUETOOTH"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+  
+  <!-- For Android 12+ -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+</manifest>
+
+2.3 IOS PERMISSIONS
+-------------------
+Update: ios/Runner/Info.plist
+
+<dict>
+  <!-- Add these entries -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>HeyBridge needs microphone access for voice calls</string>
+  
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>audio</string>
+    <string>voip</string>
+  </array>
+</dict>
+
+2.4 PERMISSION HANDLING SERVICE
+--------------------------------
+Create file: lib/services/permission_service.dart
+
+import 'package:permission_handler/permission_handler.dart';
+
+class PermissionService {
+  static Future<bool> requestMicrophonePermission() async {
+    final status = await Permission.microphone.request();
+    return status.isGranted;
+  }
+  
+  static Future<bool> checkMicrophonePermission() async {
+    final status = await Permission.microphone.status;
+    return status.isGranted;
+  }
+  
+  static Future<void> openAppSettings() async {
+    await openAppSettings();
+  }
+}
+
+================================================================================
+PHASE 3: CORE WEBRTC IMPLEMENTATION (Week 1, Days 4-7)
+================================================================================
+
+3.1 WEBRTC CONFIGURATION
+-------------------------
+Create file: lib/config/webrtc_config.dart
+
+Same as before - ICE servers, media constraints, offer constraints
+
+3.2 VOICE CHANNEL PROVIDER (Main Implementation)
+-------------------------------------------------
+Create file: lib/providers/voice_channel_provider.dart
+
+Key differences from traditional call approach:
+- No "ringing" or "incoming" states
+- Users explicitly "join" and "leave" the voice channel
+- Channel state is persistent and observable
+- Both users see who's currently in voice
+
+Core States:
+enum VoiceChannelState {
+  idle,           // Not in voice channel
+  joining,        // Connecting to voice channel
+  active,         // In voice channel, connected
+  reconnecting,   // Connection issue, trying to reconnect
+  leaving,        // Disconnecting from voice channel
+}
+
+Core Methods:
+- joinVoiceChannel(String dmChannelId)
+  1. Check microphone permission
+  2. Get local audio stream
+  3. Create or get active session from Firestore
+  4. Add self to activeParticipants array
+  5. Set up peer connection
+  6. If other user is already in channel, initiate WebRTC negotiation
+  7. Listen for other user joining (if not already there)
+
+- leaveVoiceChannel()
+  1. Remove self from activeParticipants array
+  2. Close peer connection
+  3. Stop local stream
+  4. Send leave signal to other peer
+  5. Clean up
+
+- toggleMute()
+- toggleSpeaker()
+
+Key Firestore Listeners:
+- Listen to activeParticipants array changes
+  - If array length goes from 0→1: You're alone, wait for other user
+  - If array length goes from 1→2: Other user joined, start WebRTC
+  - If array length goes from 2→1: Other user left, show notification
+
+- Listen to signaling sub-collection for WebRTC signals
+
+Implementation Flow:
+
+User A clicks "Join Voice":
+1. joinVoiceChannel() called
+2. Check if active session exists
+   - If no: Create new session, add self to activeParticipants
+   - If yes: Add self to activeParticipants
+3. Listen for activeParticipants changes
+4. If User B is already there OR User B joins:
+   - Set up peer connection
+   - Create offer
+   - Send via signaling collection
+
+User B clicks "Join Voice":
+1. joinVoiceChannel() called
+2. Get active session (created by User A)
+3. Add self to activeParticipants
+4. This triggers User A's listener
+5. User A creates offer
+6. User B receives offer, creates answer
+7. WebRTC connection established
+
+Either user clicks "Leave Voice":
+1. leaveVoiceChannel() called
+2. Remove self from activeParticipants
+3. Other user's listener detects change
+4. Connection closes gracefully
+
+Provider Structure:
+- VoiceChannelProvider {
+    VoiceChannelState state
+    String? currentDmChannelId
+    String? currentSessionId
+    String? otherUserId
+    bool isOtherUserInChannel
+    bool isMuted
+    bool isSpeakerOn
+    
+    RTCPeerConnection? peerConnection
+    MediaStream? localStream
+    MediaStream? remoteStream
+    
+    List<StreamSubscription> subscriptions
+    
+    Future<void> joinVoiceChannel(String dmChannelId)
+    Future<void> leaveVoiceChannel()
+    void toggleMute()
+    Future<void> toggleSpeaker()
+    
+    // Private helpers
+    Future<void> _setupPeerConnection()
+    Future<void> _initiateWebRTCConnection()
+    void _listenToParticipantChanges()
+    void _listenToSignals()
+    Future<void> _processSignal(DocumentSnapshot doc)
+    Future<void> _sendSignal(...)
+    void _cleanup()
+  }
+
+Key Implementation Details:
+- Session Creation/Retrieval Logic:
+  Check if active session exists for this DM channel
+  If yes and status='active', use it
+  If no or status='ended', create new session
+
+- Participant Synchronization:
+  Use Firestore transaction to safely add/remove from activeParticipants
+  Handle race conditions (both users joining simultaneously)
+
+- WebRTC Negotiation:
+  The first user to join creates the session
+  When second user joins, first user initiates offer
+  Standard SDP exchange via signaling collection
+
+- Connection Monitoring:
+  Detect if peer connection drops
+  Show reconnecting state
+  Auto-leave if can't reconnect after 30s
+
+- Edge Cases:
+  - Both users click join simultaneously
+  - Network loss during active channel
+  - App backgrounded/killed
+  - Browser tab closed
+
+================================================================================
+PHASE 4: UI IMPLEMENTATION (Week 2, Days 1-4)
+================================================================================
+
+4.1 VOICE CHANNEL BUTTON IN DM CHAT SCREEN
+-------------------------------------------
+Create file: lib/widgets/voice_channel_button.dart
+
+Purpose: Show voice channel status and allow join/leave
+Display States:
+- Empty channel (no one in voice): Show "Join Voice" button
+- User in channel alone: Show "In Voice (Waiting...)" with Leave button
+- Both users in channel: Show "In Voice" with Leave button
+- Other user in channel: Show "Join [OtherUser] in Voice" button
+
+UI Element Location: Top of DM chat screen (below app bar or in app bar)
+
+Widget Structure:
+VoiceChannelButton {
+  - dmChannelId (required)
+  - otherUserId (required)
+  - otherUserName (required)
+  
+  Watches:
+  - VoiceChannelProvider state
+  - activeParticipants array from Firestore
+  
+  Shows different UI based on:
+  - isCurrentUserInChannel
+  - isOtherUserInChannel
+  - connectionState
+}
+
+Example UI States:
+┌────────────────────────────────────────┐
+│  🎙️ Join Voice                        │  ← Both users not in voice
+└────────────────────────────────────────┘
+
+┌────────────────────────────────────────┐
+│  🔊 In Voice  •  Leave                 │  ← Current user in voice alone
+└────────────────────────────────────────┘
+
+┌────────────────────────────────────────┐
+│  🔊 In Voice with Alice  •  Leave      │  ← Both users in voice
+└────────────────────────────────────────┘
+
+┌────────────────────────────────────────┐
+│  🎙️ Join Alice in Voice               │  ← Other user in voice, you're not
+└────────────────────────────────────────┘
+
+4.2 VOICE CHANNEL CONTROLS (OVERLAY/BOTTOM SHEET)
+--------------------------------------------------
+Create file: lib/widgets/voice_channel_controls.dart
+
+Purpose: Floating controls when user is in voice channel
+Location: Bottom sheet or floating overlay on chat screen
+
+Controls to show:
+- Mute/Unmute button
+- Speaker on/off button
+- Leave voice button
+- Optional: Connection quality indicator
+- Optional: Timer showing duration in voice
+
+UI can be:
+Option A: Persistent bottom bar (like Slack)
+Option B: Floating pill that expands to show controls
+Option C: Bottom sheet that slides up
+
+Recommended: Floating pill that expands
+
+Collapsed state:
+┌──────────────────────┐
+│  🔊 In Voice  ⌄      │
+└──────────────────────┘
+
+Expanded state:
+┌──────────────────────────────────────┐
+│  In Voice with Alice        02:34    │
+│  ─────────────────────────────────   │
+│  [🎤 Mute] [🔊 Speaker] [📞 Leave]   │
+└──────────────────────────────────────┘
+
+4.3 DM SCREEN INTEGRATION
+--------------------------
+Update existing DM chat screen:
+
+Location: lib/screens/dm_chat_screen.dart
+
+Modifications needed:
+1. Add VoiceChannelButton widget at top of screen
+2. Add VoiceChannelControls when user is in voice
+3. Listen to VoiceChannelProvider for state changes
+4. Handle background/foreground transitions (keep voice active)
+
+Screen Structure:
+AppBar
+  └─ DM participant name
+  
+VoiceChannelButton (persistent)
+  
+ChatMessagesList
+  
+MessageInput
+  
+VoiceChannelControls (conditional, when in voice)
+
+4.4 PRESENCE INDICATOR
+-----------------------
+Create file: lib/widgets/voice_presence_indicator.dart
+
+Purpose: Show small indicator next to user's name when they're in voice
+Location: DM list, user avatar, etc.
+
+Simple visual indicator:
+- Green dot with headphone icon = User is in voice channel
+- No indicator = User is not in voice
+
+Can be used in:
+- DM list (to show if person is in voice even when you're not in the chat)
+- User profile
+- App bar of DM screen
+
+Example:
+┌─────────────────────────────┐
+│  Alice Smith  🎧           │  ← In voice
+│  Hey, are you there?        │
+└─────────────────────────────┘
+
+┌─────────────────────────────┐
+│  Bob Johnson                │  ← Not in voice
+│  See you tomorrow!          │
+└─────────────────────────────┘
+
+4.5 ERROR HANDLING & PERMISSIONS UI
+------------------------------------
+Create file: lib/widgets/permission_denied_dialog.dart
+
+Purpose: Handle microphone permission denial gracefully
+
+Show dialog when permission is denied:
+- Explain why permission is needed
+- Button to open app settings
+- Button to cancel
+
+Create file: lib/widgets/voice_error_snackbar.dart
+
+Purpose: Show errors during voice channel usage
+
+Errors to handle:
+- Connection failed
+- Peer disconnected unexpectedly
+- Microphone access lost
+- Network issues
+
+4.6 NAVIGATION FLOW
+-------------------
+No separate call screens needed!
+
+User Journey:
+1. User opens DM with Alice
+2. Sees "Join Voice" button at top
+3. Clicks it
+4. Permission prompt (if first time)
+5. Button changes to "In Voice (Waiting...)"
+6. Floating controls appear at bottom
+7. Alice joins from her side
+8. Button updates to "In Voice with Alice"
+9. Either user clicks Leave
+10. Returns to normal chat view
+
+No navigation to different screens - everything happens in DM chat!
+
+4.7 BACKGROUND BEHAVIOR
+------------------------
+When app goes to background while in voice:
+- Keep WebRTC connection alive
+- Show system notification "In Voice with Alice"
+- Allow returning to app from notification
+
+When app returns to foreground:
+- Restore voice channel UI
+- Re-sync state from Firestore
+
+4.8 UI WIDGETS SUMMARY
+-----------------------
+Files to create:
+1. lib/widgets/voice_channel_button.dart - Main join/leave button
+2. lib/widgets/voice_channel_controls.dart - Mute/speaker/leave controls
+3. lib/widgets/voice_presence_indicator.dart - Small indicator for user in voice
+4. lib/widgets/permission_denied_dialog.dart - Permission handling
+5. lib/widgets/voice_error_snackbar.dart - Error messages
+6. lib/widgets/connection_quality_indicator.dart - Optional quality meter
+
+Screens to modify:
+1. lib/screens/dm_chat_screen.dart - Integrate voice channel widgets
+
+No new screens needed!
+================================================================================
+PHASE 5: MONITORING & ANALYTICS (Week 2, Days 5-7)
+================================================================================
+
+5.1 CALL QUALITY MONITORING
+----------------------------
+Create file: lib/providers/voice_monitoring_provider.dart
+
+Purpose: Track WebRTC statistics in real-time
+
+Key Metrics to Track:
+- Bandwidth usage (upload/download in kbps)
+- Packet loss percentage
+- Round-trip time (latency in ms)
+- Jitter (ms)
+- Audio level
+- Connection state
+
+Implementation:
+- Use RTCPeerConnection.getStats() every 1 second
+- Parse stats reports for relevant metrics
+- Store in provider state
+- Optionally log to Firestore for analytics
+
+5.2 CONNECTION QUALITY INDICATOR
+---------------------------------
+Create file: lib/widgets/connection_quality_indicator.dart
+
+Purpose: Visual indicator of connection health
+
+Display Options:
+- Traffic light style (green/yellow/red dot)
+- Signal bars (like WiFi indicator)
+- Text label ("Excellent", "Good", "Poor")
+
+Show in VoiceChannelControls widget
+
+Quality Calculation:
+- Excellent: <50ms latency, <1% packet loss, >64kbps bandwidth
+- Good: <150ms latency, <3% packet loss, >32kbps bandwidth
+- Fair: <300ms latency, <5% packet loss, >20kbps bandwidth
+- Poor: >300ms latency or >5% packet loss
+
+5.3 ANALYTICS LOGGING
+----------------------
+Create file: lib/services/voice_analytics_service.dart
+
+Purpose: Log voice session metrics to Firestore for analysis
+
+Data to log:
+- Session start/end times
+- Duration
+- Average bandwidth
+- Average latency
+- Total packet loss
+- Device info (platform, OS version)
+- Network type (WiFi, cellular)
+
+Log frequency: Every 30 seconds during active session
+
+Use Case: Identify patterns, improve quality, debug issues
+
+5.4 DEBUGGING TOOLS (Development Only)
+---------------------------------------
+Create file: lib/screens/voice_debug_screen.dart
+
+Purpose: Show detailed WebRTC stats for debugging
+
+Show:
+- All RTCStatsReport data
+- ICE candidate pairs
+- Codec information
+- Signaling events log
+- Connection state transitions
+
+Access: Hidden debug menu or dev mode only
+
+================================================================================
+PHASE 6: TESTING & POLISH (Week 3)
+================================================================================
+
+6.1 UNIT TESTS
+--------------
+Create files in test/ directory
+
+Tests to write:
+1. test/providers/voice_channel_provider_test.dart
+   - Test state transitions
+   - Test cleanup on dispose
+   - Mock Firebase and WebRTC
+
+2. test/services/permission_service_test.dart
+   - Test permission request flow
+   - Test permission denial handling
+
+3. test/services/voice_analytics_service_test.dart
+   - Test metrics calculation
+   - Test logging
+
+6.2 WIDGET TESTS
+----------------
+Tests to write:
+1. test/widgets/voice_channel_button_test.dart
+   - Test button states based on participants
+   - Test join/leave actions
+
+2. test/widgets/voice_channel_controls_test.dart
+   - Test mute/unmute
+   - Test speaker toggle
+   - Test leave action
+
+6.3 INTEGRATION TESTS
+---------------------
+Create files in integration_test/ directory
+
+Tests to write:
+1. integration_test/voice_channel_flow_test.dart
+   - Complete flow: join -> connect -> mute -> leave
+   - Two emulators/devices communicating
+
+2. integration_test/permission_flow_test.dart
+   - Permission request and denial
+   - Settings navigation
+
+6.4 MANUAL TESTING SCENARIOS
+-----------------------------
+Test Cases:
+1. Happy path: Both users join, talk, leave cleanly
+2. Network interruption: WiFi off/on during session
+3. App backgrounding: Home button, return to app
+4. App killing: Force quit one user's app
+5. Permission denial: Deny mic permission
+6. Simultaneous join: Both users click join at same time
+7. Device switching: Bluetooth headphones connect/disconnect
+8. Long session: 30+ minute call for stability
+9. Quick actions: Join/leave repeatedly
+10. Poor network: Simulate 3G, high latency
+
+6.5 UI/UX POLISH
+----------------
+Refinements:
+1. Loading states: Show spinner when joining/connecting
+2. Animations: Smooth transitions for button states
+3. Haptic feedback: Vibrate on join/leave
+4. Sound effects: Optional join/leave sounds
+5. Error messages: User-friendly error text
+6. Empty states: Clear guidance when channel is empty
+7. Accessibility: Screen reader support, large touch targets
+8. Dark mode: Ensure all widgets support dark theme
+
+6.6 PERFORMANCE OPTIMIZATION
+-----------------------------
+Optimizations:
+1. Reduce Firestore reads: Use local state where possible
+2. Debounce rapid state changes
+3. Dispose streams properly to prevent memory leaks
+4. Optimize WebRTC constraints for mobile
+5. Battery usage: Monitor and optimize
+6. Bundle size: Check if flutter_webrtc inflates app size
+
+6.7 EDGE CASE HANDLING
+-----------------------
+Edge Cases to Handle:
+1. User deletes DM while in voice
+2. User gets blocked while in voice
+3. Multiple DMs open, join voice in different DM
+4. User changes account while in voice
+5. App update/reinstall while session exists in Firestore
+6. Time zone differences (for session timestamps)
+7. Firestore offline mode
+8. Device storage full (can't log analytics)
+
+================================================================================
+PHASE 7: DEPLOYMENT CHECKLIST (Week 3, End)
+================================================================================
+
+7.1 FIREBASE SETUP
+-------------------
+□ Deploy Firestore security rules
+□ Deploy Cloud Functions (if using)
+□ Set up indexes for queries
+□ Configure Firebase budget alerts
+□ Enable crash reporting (Crashlytics)
+
+7.2 APP STORES
+--------------
+Android:
+□ Test on multiple devices (Samsung, Pixel, etc.)
+□ Verify microphone permission request
+□ Test on Android 12+ (BLUETOOTH_CONNECT permission)
+□ Test background behavior with Android battery optimization
+
+iOS:
+□ Test on iPhone and iPad
+□ Verify Info.plist permissions
+□ Test background audio (UIBackgroundModes)
+□ Test with CallKit integration (future enhancement)
+
+7.3 MONITORING SETUP
+--------------------
+□ Set up error tracking (Sentry, Crashlytics)
+□ Create Firebase Analytics events
+□ Set up performance monitoring
+□ Create dashboard for voice session metrics
+
+7.4 DOCUMENTATION
+-----------------
+□ User guide: How to use voice channels
+□ Troubleshooting guide: Common issues
+□ Developer docs: Architecture, code structure
+□ API docs: Provider methods, state machine
+
+7.5 ROLLOUT STRATEGY
+--------------------
+Phase 1: Internal testing (team members)
+Phase 2: Beta testing (select users, 50-100)
+Phase 3: Gradual rollout (10% -> 50% -> 100%)
+Phase 4: Monitor metrics, gather feedback
+Phase 5: Iterate based on feedback
+
+================================================================================
+FUTURE ENHANCEMENTS (Post-MVP)
+================================================================================
+
+ENHANCEMENT 1: Group Voice Channels (3-10 people)
+- Upgrade to SFU architecture (Mediasoup)
+- Deploy media server (Fly.io or DigitalOcean)
+- Implement selective audio routing
+- Add speaking indicators for each participant
+
+ENHANCEMENT 2: Screen Sharing
+- Add video track support
+- Modify WebRTC constraints
+- Create screen share UI overlay
+- Handle permissions (iOS/Android)
+
+ENHANCEMENT 3: Recording
+- Implement server-side recording (Cloud Functions + Storage)
+- Local recording option
+- Transcription integration (Whisper API)
+- Playback UI
+
+ENHANCEMENT 4: Spatial Audio
+- Implement Web Audio API
+- Position users in virtual space
+- Add reverb/effects
+
+ENHANCEMENT 5: Noise Cancellation (Advanced)
+- Integrate Krisp or similar SDK
+- Or use ML model (TensorFlow Lite)
+- Real-time audio processing
+
+ENHANCEMENT 6: CallKit Integration (iOS)
+- Native iOS call UI
+- Lock screen controls
+- Siri integration
+
+ENHANCEMENT 7: Scheduled Voice Rooms
+- Calendar integration
+- Reminders/notifications
+- Recurring rooms
+
+ENHANCEMENT 8: Voice Messages (Async)
+- Record and send voice clips
+- Waveform visualization
+- Transcription
+
+================================================================================
+RESOURCES & REFERENCES
+================================================================================
+
+DOCUMENTATION:
+- flutter_webrtc: https://github.com/flutter-webrtc/flutter-webrtc
+- WebRTC API: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API
+- Firebase Security Rules: https://firebase.google.com/docs/firestore/security/get-started
+- Flutter Permission Handler: https://pub.dev/packages/permission_handler
+
+TUTORIALS:
+- WebRTC Basics: https://webrtc.org/getting-started/overview
+- Flutter WebRTC Example: https://github.com/flutter-webrtc/flutter-webrtc-demo
+- P2P Connection Flow: https://webrtc.org/getting-started/peer-connections
+
+DEBUGGING:
+- chrome://webrtc-internals (for web testing)
+- WebRTC Stats: https://www.w3.org/TR/webrtc-stats/
+- ICE Troubleshooting: https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
+
+COMMUNITY:
+- Flutter WebRTC Discord: https://discord.gg/flutter-webrtc
+- WebRTC Slack: https://webrtc-slack.herokuapp.com/
+- Stack Overflow: Tag [flutter-webrtc]
+
+================================================================================
+DEVELOPMENT TIMELINE SUMMARY
+================================================================================
+
+Week 1:
+  Day 1-2: Firebase setup (Firestore schema, security rules, Cloud Functions)
+  Day 3: Flutter dependencies, permissions, project structure
+  Day 4-7: Core WebRTC implementation (VoiceChannelProvider)
+
+Week 2:
+  Day 1-4: UI implementation (widgets, DM integration)
+  Day 5-7: Monitoring, analytics, quality indicators
+
+Week 3:
+  Day 1-3: Testing (unit, widget, integration, manual)
+  Day 4-5: Polish (UI/UX, animations, error handling)
+  Day 6-7: Deployment preparation, documentation
+
+TOTAL: ~3 weeks for MVP
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+
+MVP is successful when:
+✓ Two users can join voice channel from DM
+✓ Audio connection establishes within 5 seconds
+✓ Audio quality is clear (no echo, minimal latency)
+✓ Mute/unmute works reliably
+✓ Leave voice works cleanly
+✓ No crashes or memory leaks
+✓ Works on WiFi and cellular
+✓ Works on Android and iOS
+✓ Handles common edge cases gracefully
+✓ User can background app without dropping connection
+
+================================================================================
+NOTES FOR CLAUDE CODE
+================================================================================
+
+IMPORTANT IMPLEMENTATION NOTES:
+
+1. VOICE CHANNEL vs TRADITIONAL CALLS
+   - This is NOT a ringing/answer call system
+   - It's a persistent voice "room" that users join/leave
+   - No incoming call notifications or screens
+   - Both users see the same join button in their DM
+
+2. STATE MANAGEMENT
+   - Use Provider for VoiceChannelProvider
+   - Listen to Firestore for activeParticipants array
+   - WebRTC connection is ONLY established when both users are in channel
+
+3. CRITICAL FLOW
+   User A joins → Add to activeParticipants → Wait
+   User B joins → Add to activeParticipants → Triggers both users
+   User A creates offer → User B receives → Answer → Connected
+
+4. FIREBASE STRUCTURE
+   - One dm_channel document per DM (permanent)
+   - One voice_session document per session (created when first user joins)
+   - Signaling collection inside voice_session (ephemeral)
+
+5. UI INTEGRATION
+   - NO new screens or navigation
+   - Everything happens within existing DM chat screen
+   - Add VoiceChannelButton at top of chat
+   - Show floating controls when in voice
+
+6. PERMISSIONS
+   - Request microphone permission when user clicks join
+   - Handle denial gracefully with dialog
+   - Re-request if user goes to settings
+
+7. TESTING LOCALLY
+   - Use two devices or two emulators
+   - Ensure both connected to Firebase
+   - Test with real audio (not silent)
+
+8. COMMON PITFALLS
+   - Not disposing streams → memory leak
+   - Not handling peer disconnect → stuck state
+   - Not cleaning up Firestore signals → quota exhaustion
+   - Not setting speaker mode → can't hear audio
+   - Missing BLUETOOTH_CONNECT permission on Android 12+
+
+9. CODE ORGANIZATION
+   lib/
+   ├── config/
+   │   └── webrtc_config.dart
+   ├── providers/
+   │   ├── voice_channel_provider.dart
+   │   └── voice_monitoring_provider.dart
+   ├── services/
+   │   ├── permission_service.dart
+   │   └── voice_analytics_service.dart
+   ├── widgets/
+   │   ├── voice_channel_button.dart
+   │   ├── voice_channel_controls.dart
+   │   └── connection_quality_indicator.dart
+   └── screens/
+       └── dm_chat_screen.dart (modified)
+
+10. START HERE
+    Step 1: Set up Firestore schema and rules
+    Step 2: Add dependencies to pubspec.yaml
+    Step 3: Create webrtc_config.dart
+    Step 4: Implement VoiceChannelProvider (most complex)
+    Step 5: Create VoiceChannelButton widget
+    Step 6: Integrate into DM screen
+    Step 7: Test with two devices
+
+================================================================================
+END OF ROADMAP
+================================================================================

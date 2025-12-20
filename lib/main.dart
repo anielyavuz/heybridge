@@ -8,6 +8,7 @@ import 'services/workspace_service.dart';
 import 'services/preferences_service.dart';
 import 'services/notification_service.dart';
 import 'services/logger_service.dart';
+import 'services/navigation_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/workspace_screen.dart';
 import 'screens/workspace_list_screen.dart';
@@ -34,6 +35,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'HeyBridge',
       debugShowCheckedModeBanner: false,
+      navigatorKey: NavigationService.instance.navigatorKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4A9EFF)),
         useMaterial3: true,
@@ -50,7 +52,7 @@ class AuthWrapper extends StatefulWidget {
   State<AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _AuthWrapperState extends State<AuthWrapper> {
+class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   final _authService = AuthService();
   final _workspaceService = WorkspaceService();
   final _preferencesService = PreferencesService();
@@ -58,6 +60,27 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   String? _lastUserId;
   bool _fcmInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Clear badge when app comes to foreground
+    if (state == AppLifecycleState.resumed) {
+      NotificationService.instance.clearBadge();
+    }
+  }
 
   /// Initialize notifications for the logged-in user
   /// Called on every app launch, not just login
@@ -140,6 +163,21 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 }
 
                 final lastWorkspaceId = lastWorkspaceSnapshot.data;
+
+                // Check if there's a pending navigation from notification
+                final pendingNav = NavigationService.instance.consumePendingNavigation();
+                if (pendingNav != null) {
+                  final pendingWorkspaceId = pendingNav['workspaceId'];
+                  if (pendingWorkspaceId != null) {
+                    final targetWorkspace = workspaces.firstWhere(
+                      (w) => w.id == pendingWorkspaceId,
+                      orElse: () => workspaces.first,
+                    );
+                    // Re-set pending navigation so ChannelListScreen can handle it
+                    NavigationService.instance.setPendingNavigation(pendingNav);
+                    return ChannelListScreen(workspace: targetWorkspace);
+                  }
+                }
 
                 // Check if last workspace still exists in user's workspaces
                 if (lastWorkspaceId != null) {

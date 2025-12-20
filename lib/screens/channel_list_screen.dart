@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../services/preferences_service.dart';
 import '../services/presence_service.dart';
 import '../services/dm_service.dart';
 import '../services/firestore_service.dart';
+import '../services/navigation_service.dart';
 import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
 import '../models/direct_message_model.dart';
@@ -40,6 +42,12 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   bool _isLoading = false;
   int _selectedIndex = 0; // 0: Home, 1: DMs, 2: Channels, 3: Profile
 
+  // Timer for periodic refresh of online status
+  Timer? _onlineStatusTimer;
+
+  // Counter to force StreamBuilder rebuild for online status recalculation
+  int _refreshCounter = 0;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +59,122 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
         'workspaceName': widget.workspace.name,
       },
     );
+    // Ensure presence is active when entering workspace
+    _presenceService.goOnline();
+
+    // Check for pending navigation from notification
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPendingNavigation();
+    });
+
+    // Listen for navigation events from notifications
+    NavigationService.instance.addNavigationListener(_onNavigationRequested);
+
+    // Refresh every 30 seconds to update online status based on lastSeen
+    _onlineStatusTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        setState(() {
+          _refreshCounter++;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _onlineStatusTimer?.cancel();
+    NavigationService.instance.removeNavigationListener(_onNavigationRequested);
+    super.dispose();
+  }
+
+  void _onNavigationRequested() {
+    if (mounted) {
+      _checkPendingNavigation();
+    }
+  }
+
+  Future<void> _checkPendingNavigation() async {
+    final pendingNav = NavigationService.instance.consumePendingNavigation();
+    if (pendingNav == null) return;
+
+    _logger.info(
+      'Processing pending navigation',
+      category: 'NAVIGATION',
+      data: pendingNav,
+    );
+
+    final type = pendingNav['type'];
+    final workspaceId = pendingNav['workspaceId'];
+
+    // Only process if this is the correct workspace
+    if (workspaceId != null && workspaceId != widget.workspace.id) {
+      _logger.debug(
+        'Pending navigation is for different workspace',
+        category: 'NAVIGATION',
+      );
+      return;
+    }
+
+    if (type == 'channel_message') {
+      final channelId = pendingNav['channelId'];
+      final channelName = pendingNav['channelName'];
+      if (channelId != null) {
+        // Navigate to channel
+        final channel = ChannelModel(
+          id: channelId,
+          name: channelName ?? 'Channel',
+          workspaceId: widget.workspace.id,
+          createdBy: '',
+          createdAt: DateTime.now(),
+          memberIds: [],
+        );
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ChatScreen(workspace: widget.workspace, channel: channel),
+            ),
+          );
+        }
+      }
+    } else if (type == 'dm_message') {
+      final dmId = pendingNav['dmId'];
+      if (dmId != null) {
+        // Fetch the DM and navigate
+        try {
+          final dm = await _dmService.getDM(
+            workspaceId: widget.workspace.id,
+            dmId: dmId,
+          );
+          if (dm != null && mounted) {
+            final userId = _authService.currentUser?.uid;
+            final otherUserId = dm.participantIds.firstWhere(
+              (id) => id != userId,
+              orElse: () => '',
+            );
+            UserModel? otherUser;
+            if (otherUserId.isNotEmpty) {
+              otherUser = await _firestoreService.getUser(otherUserId);
+            }
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DMChatScreen(
+                    workspace: widget.workspace,
+                    dm: dm,
+                    otherUser: otherUser,
+                  ),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          _logger.error('Failed to navigate to DM: $e', category: 'NAVIGATION');
+        }
+      }
+    }
   }
 
   @override
@@ -707,8 +831,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF2D3748),
           title: Text(
             channelIsPrivate ? 'Create Private Channel' : 'Create Channel',
@@ -816,7 +940,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
                   'ChannelListScreen',
                   'create_channel_dialog_cancelled',
                 );
-                Navigator.of(context).pop();
+                Navigator.of(dialogContext).pop();
               },
               child: const Text(
                 'Cancel',
@@ -825,7 +949,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
             ),
             ElevatedButton(
               onPressed: () => _handleCreateChannel(
-                context: context,
+                dialogContext: dialogContext,
                 name: nameController.text,
                 description: descriptionController.text.isEmpty
                     ? null
@@ -853,30 +977,17 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }
 
   Future<void> _handleCreateChannel({
-    required BuildContext context,
+    required BuildContext dialogContext,
     required String name,
     required String? description,
     required bool isPrivate,
   }) async {
     // Validate channel name
-    final cleanName = name.trim().toLowerCase().replaceAll(' ', '-');
+    final cleanName = name.trim();
     if (cleanName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Kanal adı boş olamaz'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Validate channel name format (alphanumeric and hyphens only)
-    if (!RegExp(r'^[a-z0-9-]+$').hasMatch(cleanName)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Kanal adı sadece küçük harf, rakam ve tire içerebilir',
-          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -903,7 +1014,8 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
       );
 
       if (mounted) {
-        Navigator.of(context).pop(); // Close dialog
+        // Close dialog first, then show snackbar
+        Navigator.of(dialogContext).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('#$cleanName kanalı oluşturuldu!'),
@@ -1263,21 +1375,15 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
     final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
 
-    // Check cache first - if cached, render immediately without loading state
-    if (_userCache.containsKey(otherUserId)) {
-      final otherUser = _userCache[otherUserId];
-      return _buildDMItemContent(dm, otherUser, unreadCount);
-    }
-
-    // Not in cache - fetch but show nothing until loaded (no flash)
-    return FutureBuilder<UserModel?>(
-      future: _firestoreService.getUser(otherUserId).then((user) {
-        _userCache[otherUserId] = user;
-        return user;
-      }),
+    // Use StreamBuilder for real-time online status updates
+    // Key includes refreshCounter to force rebuild when timer triggers
+    return StreamBuilder<UserModel?>(
+      key: ValueKey('dm_user_${otherUserId}_$_refreshCounter'),
+      stream: _firestoreService.getUserStream(otherUserId),
       builder: (context, snapshot) {
         // While loading, show a minimal placeholder (same height, no text)
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const SizedBox(height: 30); // Placeholder with same height
         }
         final otherUser = snapshot.data;
@@ -1322,26 +1428,33 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
               // Avatar with online indicator
               Stack(
                 children: [
-                  Builder(builder: (context) {
-                    final photo = otherUser?.photoURL;
-                    final hasValidPhoto = photo != null && photo.isNotEmpty &&
-                        (photo.startsWith('http://') || photo.startsWith('https://'));
-                    return CircleAvatar(
-                      radius: 9,
-                      backgroundColor: const Color(0xFF4A9EFF),
-                      backgroundImage: hasValidPhoto ? NetworkImage(photo) : null,
-                      child: !hasValidPhoto
-                          ? Text(
-                              displayName[0].toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                    );
-                  }),
+                  Builder(
+                    builder: (context) {
+                      final photo = otherUser?.photoURL;
+                      final hasValidPhoto =
+                          photo != null &&
+                          photo.isNotEmpty &&
+                          (photo.startsWith('http://') ||
+                              photo.startsWith('https://'));
+                      return CircleAvatar(
+                        radius: 9,
+                        backgroundColor: const Color(0xFF4A9EFF),
+                        backgroundImage: hasValidPhoto
+                            ? NetworkImage(photo)
+                            : null,
+                        child: !hasValidPhoto
+                            ? Text(
+                                displayName[0].toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
+                      );
+                    },
+                  ),
                   // Online indicator dot
                   Positioned(
                     right: 0,
@@ -1579,9 +1692,6 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
   }
 
-  // Cache for user data to prevent flickering
-  final Map<String, UserModel?> _userCache = {};
-
   Widget _buildDMListItem(DirectMessageModel dm, String currentUserId) {
     final otherParticipantId = dm.participantIds.firstWhere(
       (id) => id != currentUserId,
@@ -1589,20 +1699,15 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     );
     final unreadCount = dm.unreadCounts[currentUserId] ?? 0;
 
-    // Check cache first
-    if (_userCache.containsKey(otherParticipantId)) {
-      final otherUser = _userCache[otherParticipantId];
-      return _buildDMListItemContent(dm, otherUser, unreadCount);
-    }
-
-    return FutureBuilder<UserModel?>(
-      future: _firestoreService.getUser(otherParticipantId).then((user) {
-        _userCache[otherParticipantId] = user;
-        return user;
-      }),
+    // Use StreamBuilder for real-time online status updates
+    // Key includes refreshCounter to force rebuild when timer triggers
+    return StreamBuilder<UserModel?>(
+      key: ValueKey('dms_tab_user_${otherParticipantId}_$_refreshCounter'),
+      stream: _firestoreService.getUserStream(otherParticipantId),
       builder: (context, userSnapshot) {
         // Show placeholder while loading
-        if (userSnapshot.connectionState == ConnectionState.waiting) {
+        if (userSnapshot.connectionState == ConnectionState.waiting &&
+            !userSnapshot.hasData) {
           return _buildDMListItemContent(
             dm,
             null,
@@ -1624,7 +1729,9 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
   }) {
     final displayName = otherUser?.displayName ?? 'User';
     final photoURL = otherUser?.photoURL;
-    final hasValidPhoto = photoURL != null && photoURL.isNotEmpty &&
+    final hasValidPhoto =
+        photoURL != null &&
+        photoURL.isNotEmpty &&
         (photoURL.startsWith('http://') || photoURL.startsWith('https://'));
 
     return Material(
@@ -1786,7 +1893,7 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
     final difference = now.difference(dateTime);
 
     if (difference.inDays == 0) {
-      return DateFormat('h:mm a').format(dateTime);
+      return DateFormat('HH:mm').format(dateTime);
     } else if (difference.inDays == 1) {
       return 'Yesterday';
     } else if (difference.inDays < 7) {
