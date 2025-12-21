@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'services/workspace_service.dart';
@@ -9,6 +10,7 @@ import 'services/preferences_service.dart';
 import 'services/notification_service.dart';
 import 'services/logger_service.dart';
 import 'services/navigation_service.dart';
+import 'providers/voice_channel_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/workspace_screen.dart';
 import 'screens/workspace_list_screen.dart';
@@ -32,15 +34,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'HeyBridge',
-      debugShowCheckedModeBanner: false,
-      navigatorKey: NavigationService.instance.navigatorKey,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4A9EFF)),
-        useMaterial3: true,
+    return ChangeNotifierProvider(
+      create: (_) => VoiceChannelProvider(),
+      child: MaterialApp(
+        title: 'HeyBridge',
+        debugShowCheckedModeBanner: false,
+        navigatorKey: NavigationService.instance.navigatorKey,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4A9EFF)),
+          useMaterial3: true,
+        ),
+        home: const AuthWrapper(),
       ),
-      home: const AuthWrapper(),
     );
   }
 }

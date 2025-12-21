@@ -137,6 +137,41 @@ service cloud.firestore {
           allow delete: if isSignedIn() &&
                            request.auth.uid == resource.data.senderId;
         }
+
+        // Voice Sessions subcollection for WebRTC voice channels
+        match /voiceSessions/{sessionId} {
+          // Only DM participants can read voice sessions
+          allow read: if isSignedIn() &&
+                         request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
+
+          // Only DM participants can create voice sessions
+          allow create: if isSignedIn() &&
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
+
+          // Participants can update voice sessions (join/leave)
+          allow update: if isSignedIn() &&
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
+
+          // Participants can delete voice sessions
+          allow delete: if isSignedIn() &&
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
+
+          // Signaling subcollection for WebRTC offer/answer/ICE candidates
+          match /signaling/{signalingId} {
+            // Participants can read signaling messages
+            allow read: if isSignedIn() &&
+                           request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds;
+
+            // Participants can create signaling messages
+            allow create: if isSignedIn() &&
+                             request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)/directMessages/$(dmId)).data.participantIds &&
+                             request.auth.uid == request.resource.data.from;
+
+            // Recipient can delete signaling messages after processing
+            allow delete: if isSignedIn() &&
+                             request.auth.uid == resource.data.to;
+          }
+        }
       }
     }
 

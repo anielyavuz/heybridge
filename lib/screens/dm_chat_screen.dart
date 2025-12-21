@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../models/workspace_model.dart';
 import '../models/direct_message_model.dart';
 import '../models/message_model.dart';
@@ -14,6 +15,9 @@ import '../services/dm_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/fcm_api_service.dart';
+import '../providers/voice_channel_provider.dart';
+import '../widgets/voice_channel_button.dart';
+import '../widgets/voice_channel_controls.dart';
 
 class DMChatScreen extends StatefulWidget {
   final WorkspaceModel workspace;
@@ -517,14 +521,29 @@ class _DMChatScreenState extends State<DMChatScreen> {
             );
           },
         ),
+        actions: [
+          // Voice channel button
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: VoiceChannelButton(
+              workspaceId: widget.workspace.id,
+              dmId: widget.dm.id,
+              currentUserId: _authService.currentUser?.uid ?? '',
+              otherUserId: _otherUserId ?? '',
+              otherUserName: _otherUserData?.displayName ?? 'User',
+            ),
+          ),
+        ],
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
-        child: Column(
+        child: Stack(
           children: [
-            // Messages Area
-            Expanded(
-              child: StreamBuilder<List<MessageModel>>(
+            Column(
+              children: [
+                // Messages Area
+                Expanded(
+                  child: StreamBuilder<List<MessageModel>>(
               stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -570,8 +589,28 @@ class _DMChatScreenState extends State<DMChatScreen> {
             ),
             ),
 
-            // Message Input Area (same as ChatScreen)
-            _buildMessageInput(),
+                // Message Input Area (same as ChatScreen)
+                _buildMessageInput(),
+              ],
+            ),
+
+            // Voice channel controls overlay
+            Consumer<VoiceChannelProvider>(
+              builder: (context, voiceProvider, child) {
+                if (voiceProvider.currentDmId == widget.dm.id &&
+                    voiceProvider.isInVoiceChannel) {
+                  return Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: VoiceChannelControls(
+                      otherUserName: _otherUserData?.displayName ?? 'User',
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ],
         ),
       ),
