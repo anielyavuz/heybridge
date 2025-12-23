@@ -144,13 +144,13 @@ class _ChannelSettingsScreenState extends State<ChannelSettingsScreen> {
                 },
               ),
               _buildSettingItem(
-                icon: Icons.notifications,
-                title: 'Notifications',
-                subtitle: 'Manage notification preferences',
+                icon: Icons.notifications_off,
+                title: 'Mute Channel',
+                subtitle: 'Stop receiving notifications from this channel',
                 onTap: () {
-                  // TODO: Show notification settings
+                  // TODO: Implement mute functionality
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Notification settings coming soon!')),
+                    const SnackBar(content: Text('Mute feature coming soon!')),
                   );
                 },
               ),
@@ -160,13 +160,15 @@ class _ChannelSettingsScreenState extends State<ChannelSettingsScreen> {
 
             // Danger Zone
             _buildSettingsSection([
-              _buildSettingItem(
-                icon: Icons.exit_to_app,
-                title: 'Leave Channel',
-                subtitle: 'You will no longer have access to this channel',
-                onTap: () => _showLeaveChannelDialog(),
-                isDestructive: true,
-              ),
+              // Leave channel only for private channels (public channels are visible to everyone)
+              if (widget.channel.isPrivate)
+                _buildSettingItem(
+                  icon: Icons.exit_to_app,
+                  title: 'Leave Channel',
+                  subtitle: 'You will no longer have access to this channel',
+                  onTap: () => _showLeaveChannelDialog(),
+                  isDestructive: true,
+                ),
               if (isCreator)
                 _buildSettingItem(
                   icon: Icons.delete,

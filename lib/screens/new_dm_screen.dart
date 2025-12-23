@@ -49,16 +49,23 @@ class _NewDMScreenState extends State<NewDMScreen> {
       final currentUserId = _authService.currentUser?.uid;
       if (currentUserId == null) return;
 
-      // Get all workspace members except current user
-      final members = <UserModel>[];
-      for (final memberId in widget.workspace.memberIds) {
-        if (memberId != currentUserId) {
-          final user = await _firestoreService.getUser(memberId);
-          if (user != null) {
-            members.add(user);
-          }
-        }
+      // Get member IDs except current user
+      final memberIds = widget.workspace.memberIds
+          .where((id) => id != currentUserId)
+          .toList();
+
+      if (memberIds.isEmpty) {
+        setState(() {
+          _workspaceMembers = [];
+          _filteredMembers = [];
+          _isLoading = false;
+        });
+        return;
       }
+
+      // Batch fetch all users at once (uses cache internally)
+      final usersMap = await _firestoreService.getUsers(memberIds);
+      final members = usersMap.values.toList();
 
       // Sort by display name
       members.sort((a, b) => a.displayName.compareTo(b.displayName));

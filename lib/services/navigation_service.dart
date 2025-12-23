@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class NavigationService {
@@ -7,6 +8,18 @@ class NavigationService {
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   Map<String, dynamic>? _pendingNavigation;
+
+  // Active DM tracking - used to suppress notifications for the DM user is viewing
+  String? _activeDmId;
+
+  /// Set the currently active DM (user is viewing this DM chat)
+  void setActiveDM(String? dmId) {
+    debugPrint('NavigationService.setActiveDM: $dmId (was: $_activeDmId)');
+    _activeDmId = dmId;
+  }
+
+  /// Get the currently active DM ID
+  String? get activeDmId => _activeDmId;
 
   // Callbacks for navigation events
   final List<VoidCallback> _navigationListeners = [];

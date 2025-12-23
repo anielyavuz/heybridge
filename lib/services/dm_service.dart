@@ -87,6 +87,7 @@ class DMService {
   }
 
   // Update DM metadata (last message, timestamp, unread counts)
+  // Optimized: Uses transaction to avoid separate read
   Future<void> updateDMMetadata({
     required String workspaceId,
     required String dmId,
@@ -99,27 +100,31 @@ class DMService {
         .collection('directMessages')
         .doc(dmId);
 
-    final dmDoc = await dmRef.get();
-    if (!dmDoc.exists) return;
+    // Use transaction to read and update atomically (single read)
+    await _firestore.runTransaction((transaction) async {
+      final dmDoc = await transaction.get(dmRef);
+      if (!dmDoc.exists) return;
 
-    final dm = DirectMessageModel.fromMap(dmDoc.data()!, dmDoc.id);
-    final unreadCounts = Map<String, int>.from(dm.unreadCounts);
+      final dm = DirectMessageModel.fromMap(dmDoc.data()!, dmDoc.id);
+      final unreadCounts = Map<String, int>.from(dm.unreadCounts);
 
-    // Increment unread count for other participant
-    for (final participantId in dm.participantIds) {
-      if (participantId != senderId) {
-        unreadCounts[participantId] = (unreadCounts[participantId] ?? 0) + 1;
+      // Increment unread count for other participant
+      for (final participantId in dm.participantIds) {
+        if (participantId != senderId) {
+          unreadCounts[participantId] = (unreadCounts[participantId] ?? 0) + 1;
+        }
       }
-    }
 
-    await dmRef.update({
-      'lastMessage': lastMessage,
-      'lastMessageAt': Timestamp.now(),
-      'unreadCounts': unreadCounts,
+      transaction.update(dmRef, {
+        'lastMessage': lastMessage,
+        'lastMessageAt': Timestamp.now(),
+        'unreadCounts': unreadCounts,
+      });
     });
   }
 
   // Mark DM as read for a user
+  // Optimized: Direct update using dot notation (no read required)
   Future<void> markAsRead({
     required String workspaceId,
     required String dmId,
@@ -131,14 +136,8 @@ class DMService {
         .collection('directMessages')
         .doc(dmId);
 
-    final dmDoc = await dmRef.get();
-    if (!dmDoc.exists) return;
-
-    final dm = DirectMessageModel.fromMap(dmDoc.data()!, dmDoc.id);
-    final unreadCounts = Map<String, int>.from(dm.unreadCounts);
-    unreadCounts[userId] = 0;
-
-    await dmRef.update({'unreadCounts': unreadCounts});
+    // Use dot notation to update specific field without reading entire document
+    await dmRef.update({'unreadCounts.$userId': 0});
   }
 
   // Archive DM

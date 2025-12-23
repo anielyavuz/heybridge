@@ -10,7 +10,9 @@ import 'services/preferences_service.dart';
 import 'services/notification_service.dart';
 import 'services/logger_service.dart';
 import 'services/navigation_service.dart';
+import 'services/firestore_service.dart';
 import 'providers/voice_channel_provider.dart';
+import 'providers/current_user_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/workspace_screen.dart';
 import 'screens/workspace_list_screen.dart';
@@ -34,8 +36,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => VoiceChannelProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => VoiceChannelProvider()),
+        ChangeNotifierProvider(create: (_) => CurrentUserProvider()),
+      ],
       child: MaterialApp(
         title: 'HeyBridge',
         debugShowCheckedModeBanner: false,
@@ -118,6 +123,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
         // If user is not logged in, show login screen
         if (!authSnapshot.hasData) {
+          if (_lastUserId != null) {
+            // User logged out - clear caches
+            context.read<CurrentUserProvider>().clear();
+            FirestoreService().clearUserCache();
+          }
           _lastUserId = null;
           return const LoginScreen();
         }
@@ -125,10 +135,12 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         // User is logged in, check if they have workspaces
         final userId = authSnapshot.data!.uid;
 
-        // Initialize FCM token on every app launch (handles duplicates internally)
+        // Initialize FCM token and user provider on every app launch
         if (_lastUserId != userId) {
           _lastUserId = userId;
           _fcmInitialized = false; // Reset for new user
+          // Initialize CurrentUserProvider with logged in user
+          context.read<CurrentUserProvider>().initialize(userId);
         }
         _initializeNotificationsForUser(userId);
 

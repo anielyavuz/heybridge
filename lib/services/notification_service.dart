@@ -54,6 +54,15 @@ class NotificationService {
     _logger.debug('Initializing local notifications...', category: 'FCM');
     await _initializeLocalNotifications();
 
+    // Disable iOS system notifications in foreground - we handle them with in-app banners
+    // This allows us to suppress notifications (e.g., when user is viewing the DM)
+    _logger.debug('Configuring foreground notification options...', category: 'FCM');
+    await _messaging.setForegroundNotificationPresentationOptions(
+      alert: false,  // Don't show system alert - we use InAppNotification
+      badge: true,   // Keep badge updates
+      sound: false,  // Don't play system sound - we control this
+    );
+
     // Setup message handlers
     _logger.debug('Setting up message handlers...', category: 'FCM');
     _setupMessageHandlers();
@@ -284,6 +293,19 @@ class NotificationService {
 
     final notification = message.notification;
     final data = message.data;
+
+    // Suppress DM notifications if user is currently viewing that DM
+    // Check for dmId in data - if present and matches active DM, suppress notification
+    final dmId = data['dmId'];
+    final activeDmId = NavigationService.instance.activeDmId;
+
+    if (dmId != null && activeDmId != null && dmId == activeDmId) {
+      _logger.debug('Suppressing DM notification - user is viewing this DM',
+        category: 'FCM',
+        data: {'dmId': dmId}
+      );
+      return;
+    }
 
     final title = notification?.title ?? 'HeyBridge';
     final body = notification?.body ?? '';

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../models/workspace_model.dart';
 import '../models/channel_model.dart';
 import '../models/message_model.dart';
@@ -13,9 +14,9 @@ import '../services/message_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/channel_service.dart';
-import '../services/workspace_service.dart';
 import '../services/webhook_service.dart';
 import '../models/webhook_model.dart';
+import '../providers/current_user_provider.dart';
 import 'channel_settings_screen.dart';
 import '../widgets/linkified_text.dart';
 import '../services/preferences_service.dart';
@@ -36,7 +37,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
   final _channelService = ChannelService();
-  final _workspaceService = WorkspaceService();
   final _prefsService = PreferencesService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -69,6 +69,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Mark channel as read when opening
     _markAsRead();
+
+    // Auto-join channel if not already a member (for public channels)
+    // This enables notifications for this user
+    _autoJoinChannel();
+  }
+
+  Future<void> _autoJoinChannel() async {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+
+    // Only auto-join if user is not already a member
+    if (!widget.channel.memberIds.contains(userId)) {
+      try {
+        await _channelService.joinChannel(
+          workspaceId: widget.workspace.id,
+          channelId: widget.channel.id,
+          userId: userId,
+        );
+        _logger.info('Auto-joined channel', category: 'CHANNEL', data: {
+          'channelId': widget.channel.id,
+          'channelName': widget.channel.name,
+        });
+      } catch (e) {
+        _logger.error('Failed to auto-join channel: $e', category: 'CHANNEL');
+      }
+    }
   }
 
   Future<void> _loadQuickEmoji() async {
@@ -165,17 +191,20 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       } else {
         // Send new message
-        // Get user name - first try Firebase Auth, then Firestore
-        String userName = _authService.currentUser?.displayName ?? '';
-        String? userPhotoURL = _authService.currentUser?.photoURL;
+        // Get user name from CurrentUserProvider (cached) or Firebase Auth
+        final userProvider = context.read<CurrentUserProvider>();
+        String userName = userProvider.displayName;
+        String? userPhotoURL = userProvider.photoURL;
 
+        // Fallback to Firebase Auth if provider not initialized
         if (userName.isEmpty) {
-          final userDoc = await _firestoreService.getUser(userId);
-          userName =
-              userDoc?.displayName ??
-              _authService.currentUser?.email?.split('@')[0] ??
-              'User';
-          userPhotoURL = userDoc?.photoURL;
+          userName = _authService.currentUser?.displayName ?? '';
+          userPhotoURL = _authService.currentUser?.photoURL;
+        }
+
+        // Last resort: use email prefix (cache will be warm on next message)
+        if (userName.isEmpty) {
+          userName = _authService.currentUser?.email?.split('@')[0] ?? 'User';
         }
 
         await _messageService.sendMessage(
@@ -189,37 +218,28 @@ class _ChatScreenState extends State<ChatScreen> {
         );
 
         // Increment unread count for all workspace members (public channels)
-        // Fetch fresh workspace data to get current memberIds
-        final currentWorkspace = await _workspaceService.getWorkspace(
-          widget.workspace.id,
-        );
-        if (currentWorkspace != null && currentWorkspace.memberIds.isNotEmpty) {
-          _logger.log(
-            'Calling incrementUnreadCount',
-            category: 'Chat',
-            data: {
-              'workspaceId': widget.workspace.id,
-              'channelId': widget.channel.id,
-              'senderId': userId,
-              'memberIds': currentWorkspace.memberIds,
-              'memberCount': currentWorkspace.memberIds.length,
-            },
-          );
+        // Fetch fresh workspace data to get current member list
+        final workspaceDoc = await _firestoreService.firestore
+            .collection('workspaces')
+            .doc(widget.workspace.id)
+            .get();
+
+        final freshMemberIds = workspaceDoc.exists
+            ? List<String>.from(workspaceDoc.data()?['memberIds'] ?? [])
+            : widget.workspace.memberIds;
+
+        _logger.debug('Incrementing unread for members', category: 'CHANNEL', data: {
+          'channelId': widget.channel.id,
+          'memberCount': freshMemberIds.length,
+          'senderId': userId,
+        });
+
+        if (freshMemberIds.isNotEmpty) {
           await _channelService.incrementUnreadCount(
             workspaceId: widget.workspace.id,
             channelId: widget.channel.id,
             senderId: userId,
-            memberIds: currentWorkspace.memberIds,
-          );
-        } else {
-          _logger.log(
-            'Could not fetch workspace or memberIds empty',
-            level: LogLevel.warning,
-            category: 'Chat',
-            data: {
-              'workspaceId': widget.workspace.id,
-              'workspaceFound': currentWorkspace != null,
-            },
+            memberIds: freshMemberIds,
           );
         }
 
@@ -274,11 +294,11 @@ class _ChatScreenState extends State<ChatScreen> {
         data: {'taskText': taskText, 'channelId': widget.channel.id},
       );
 
-      // Get user name
-      String userName = _authService.currentUser?.displayName ?? '';
+      // Get user name from CurrentUserProvider (cached)
+      final userProvider = context.read<CurrentUserProvider>();
+      String userName = userProvider.displayName;
       if (userName.isEmpty) {
-        final userDoc = await _firestoreService.getUser(userId);
-        userName = userDoc?.displayName ??
+        userName = _authService.currentUser?.displayName ??
             _authService.currentUser?.email?.split('@')[0] ??
             'User';
       }

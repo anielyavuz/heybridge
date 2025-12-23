@@ -15,7 +15,9 @@ import '../services/dm_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/fcm_api_service.dart';
+import '../services/navigation_service.dart';
 import '../providers/voice_channel_provider.dart';
+import '../providers/current_user_provider.dart';
 import '../widgets/voice_channel_button.dart';
 import '../widgets/voice_channel_controls.dart';
 import '../widgets/webrtc_monitor_panel.dart';
@@ -64,6 +66,10 @@ class _DMChatScreenState extends State<DMChatScreen> {
     _initOtherUserStream();
     _loadQuickEmoji();
 
+    // Set active DM to suppress notifications from this user while viewing
+    NavigationService.instance.setActiveDM(widget.dm.id);
+    _logger.info('Active DM set', category: 'DM', data: {'dmId': widget.dm.id});
+
     _logger.logUI('DMChatScreen', 'screen_opened',
       data: {
         'workspaceId': widget.workspace.id,
@@ -94,6 +100,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
   }
 
   Stream<List<MessageModel>> _getMessagesStream() {
+    final currentUserId = _authService.currentUser?.uid;
     return _firestoreService.firestore
         .collection('workspaces')
         .doc(widget.workspace.id)
@@ -104,9 +111,24 @@ class _DMChatScreenState extends State<DMChatScreen> {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final messages = snapshot.docs
           .map((doc) => MessageModel.fromMap(doc.data(), doc.id))
           .toList();
+
+      // Auto mark as read when new messages arrive while viewing this DM
+      if (currentUserId != null && messages.isNotEmpty) {
+        // Check if there are messages from others (not from current user)
+        final hasNewFromOthers = messages.any((m) => m.senderId != currentUserId);
+        if (hasNewFromOthers) {
+          _dmService.markAsRead(
+            workspaceId: widget.workspace.id,
+            dmId: widget.dm.id,
+            userId: currentUserId,
+          );
+        }
+      }
+
+      return messages;
     });
   }
 
@@ -141,6 +163,8 @@ class _DMChatScreenState extends State<DMChatScreen> {
 
   @override
   void dispose() {
+    // Clear active DM when leaving the screen
+    NavigationService.instance.setActiveDM(null);
     _messageController.dispose();
     _scrollController.dispose();
     _messageFocusNode.dispose();
@@ -189,14 +213,20 @@ class _DMChatScreenState extends State<DMChatScreen> {
           data: {'dmId': widget.dm.id, 'messageId': editingMessageId}
         );
       } else {
-        // Send new message
-        String userName = _authService.currentUser?.displayName ?? '';
-        String? userPhotoURL = _authService.currentUser?.photoURL;
+        // Send new message - use CurrentUserProvider (cached)
+        final userProvider = context.read<CurrentUserProvider>();
+        String userName = userProvider.displayName;
+        String? userPhotoURL = userProvider.photoURL;
 
+        // Fallback to Firebase Auth if provider not initialized
         if (userName.isEmpty) {
-          final userDoc = await _firestoreService.getUser(userId);
-          userName = userDoc?.displayName ?? _authService.currentUser?.email?.split('@')[0] ?? 'User';
-          userPhotoURL = userDoc?.photoURL;
+          userName = _authService.currentUser?.displayName ?? '';
+          userPhotoURL = _authService.currentUser?.photoURL;
+        }
+
+        // Last resort: use email prefix
+        if (userName.isEmpty) {
+          userName = _authService.currentUser?.email?.split('@')[0] ?? 'User';
         }
 
         final messageRef = _firestoreService.firestore
@@ -283,11 +313,11 @@ class _DMChatScreenState extends State<DMChatScreen> {
         data: {'taskText': taskText, 'dmId': widget.dm.id},
       );
 
-      // Get user name
-      String userName = _authService.currentUser?.displayName ?? '';
+      // Get user name from CurrentUserProvider (cached)
+      final userProvider = context.read<CurrentUserProvider>();
+      String userName = userProvider.displayName;
       if (userName.isEmpty) {
-        final userDoc = await _firestoreService.getUser(userId);
-        userName = userDoc?.displayName ??
+        userName = _authService.currentUser?.displayName ??
             _authService.currentUser?.email?.split('@')[0] ??
             'User';
       }
