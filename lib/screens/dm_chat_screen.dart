@@ -18,6 +18,9 @@ import '../services/fcm_api_service.dart';
 import '../providers/voice_channel_provider.dart';
 import '../widgets/voice_channel_button.dart';
 import '../widgets/voice_channel_controls.dart';
+import '../widgets/webrtc_monitor_panel.dart';
+import '../widgets/linkified_text.dart';
+import '../services/preferences_service.dart';
 
 class DMChatScreen extends StatefulWidget {
   final WorkspaceModel workspace;
@@ -41,6 +44,7 @@ class _DMChatScreenState extends State<DMChatScreen> {
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
   final _fcmService = FcmApiService.instance;
+  final _prefsService = PreferencesService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _messageFocusNode = FocusNode();
@@ -51,12 +55,14 @@ class _DMChatScreenState extends State<DMChatScreen> {
   Stream<UserModel?>? _otherUserStream;
   UserModel? _otherUserData;
   String? _otherUserId;
+  String _quickEmoji = '❤️';
 
   @override
   void initState() {
     super.initState();
     _otherUserData = widget.otherUser;
     _initOtherUserStream();
+    _loadQuickEmoji();
 
     _logger.logUI('DMChatScreen', 'screen_opened',
       data: {
@@ -77,6 +83,13 @@ class _DMChatScreenState extends State<DMChatScreen> {
         dmId: widget.dm.id,
         userId: currentUserId,
       );
+    }
+  }
+
+  Future<void> _loadQuickEmoji() async {
+    final emoji = await _prefsService.getQuickEmoji();
+    if (mounted) {
+      setState(() => _quickEmoji = emoji);
     }
   }
 
@@ -355,6 +368,16 @@ class _DMChatScreenState extends State<DMChatScreen> {
         .collection('messages')
         .doc(messageId);
 
+    // Get message data before transaction for notification
+    String? messageText;
+    String? messageSenderId;
+    final messageSnapshot = await messageRef.get();
+    if (messageSnapshot.exists) {
+      final msgData = messageSnapshot.data()!;
+      messageText = msgData['text'] as String?;
+      messageSenderId = msgData['senderId'] as String?;
+    }
+
     await _firestoreService.firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(messageRef);
       if (!snapshot.exists) return;
@@ -374,6 +397,28 @@ class _DMChatScreenState extends State<DMChatScreen> {
 
       transaction.update(messageRef, {'reactions': reactions});
     });
+
+    // Send notification to message owner (if not self)
+    if (messageSenderId != null && messageSenderId != userId && messageText != null) {
+      final currentUser = _authService.currentUser;
+      final senderName = currentUser?.displayName ??
+          currentUser?.email?.split('@')[0] ??
+          'Birisi';
+
+      // Truncate message if too long
+      final truncatedMessage = messageText.length > 30
+          ? '${messageText.substring(0, 30)}...'
+          : messageText;
+
+      _fcmService.notifyDMMessage(
+        workspaceId: widget.workspace.id,
+        dmId: widget.dm.id,
+        senderId: userId,
+        senderName: senderName,
+        message: '$emoji "$truncatedMessage" mesajına tepki verdi',
+        messageId: messageId,
+      );
+    }
   }
 
   Future<void> _removeReaction(String messageId, String emoji, String userId) async {
@@ -611,6 +656,9 @@ class _DMChatScreenState extends State<DMChatScreen> {
                 return const SizedBox.shrink();
               },
             ),
+
+            // WebRTC Monitor Panel
+            const WebRTCMonitorPanel(),
           ],
         ),
       ),
@@ -806,124 +854,133 @@ class _DMChatScreenState extends State<DMChatScreen> {
             Flexible(
               child: GestureDetector(
                 onLongPress: () => _showMessageOptions(message),
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isOwnMessage
-                        ? const Color(0xFF4A9EFF)
-                        : const Color(0xFF2D3748),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isOwnMessage ? 18 : 4),
-                      bottomRight: Radius.circular(isOwnMessage ? 4 : 18),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Reply preview if applicable
-                      if (message.replyToId != null)
-                        FutureBuilder<MessageModel?>(
-                          future: _getMessage(message.replyToId!),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return const SizedBox.shrink();
-                            final repliedMessage = snapshot.data!;
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border(
-                                  left: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                    width: 3,
-                                  ),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    repliedMessage.senderName,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.9),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    repliedMessage.text,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.7),
-                                      fontSize: 12,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-
-                      // Message text
-                      Text(
-                        message.text,
-                        textAlign: TextAlign.start,
-                        style: TextStyle(
-                          color: message.isDeleted
-                              ? Colors.white.withValues(alpha: 0.6)
-                              : Colors.white,
-                          fontSize: 15,
-                          fontStyle: message.isDeleted ? FontStyle.italic : FontStyle.normal,
-                          height: 1.4,
+                onDoubleTap: () => _onDoubleTapMessage(message),
+                child: Column(
+                  crossAxisAlignment: isOwnMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.75,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isOwnMessage
+                            ? const Color(0xFF4A9EFF)
+                            : const Color(0xFF2D3748),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(18),
+                          topRight: const Radius.circular(18),
+                          bottomLeft: Radius.circular(isOwnMessage ? 18 : 4),
+                          bottomRight: Radius.circular(isOwnMessage ? 4 : 18),
                         ),
                       ),
-
-                      const SizedBox(height: 4),
-
-                      // Timestamp
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            DateFormat('HH:mm').format(message.createdAt),
+                          // Reply preview if applicable
+                          if (message.replyToId != null)
+                            FutureBuilder<MessageModel?>(
+                              future: _getMessage(message.replyToId!),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) return const SizedBox.shrink();
+                                final repliedMessage = snapshot.data!;
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border(
+                                      left: BorderSide(
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                        width: 3,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        repliedMessage.senderName,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.9),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        repliedMessage.text,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                          fontSize: 12,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+
+                          // Message text with clickable links
+                          LinkifiedText(
+                            text: message.text,
+                            textAlign: TextAlign.start,
                             style: TextStyle(
-                              color: isOwnMessage
-                                  ? Colors.white.withValues(alpha: 0.8)
-                                  : Colors.white.withValues(alpha: 0.5),
-                              fontSize: 11,
+                              color: message.isDeleted
+                                  ? Colors.white.withValues(alpha: 0.6)
+                                  : Colors.white,
+                              fontSize: 15,
+                              fontStyle: message.isDeleted ? FontStyle.italic : FontStyle.normal,
+                              height: 1.4,
                             ),
                           ),
-                          if (message.isEdited) ...[
-                            const SizedBox(width: 4),
-                            Text(
-                              '(edited)',
-                              style: TextStyle(
-                                color: isOwnMessage
-                                    ? Colors.white.withValues(alpha: 0.8)
-                                    : Colors.white.withValues(alpha: 0.5),
-                                fontSize: 10,
-                                fontStyle: FontStyle.italic,
+
+                          const SizedBox(height: 4),
+
+                          // Timestamp
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                DateFormat('HH:mm').format(message.createdAt),
+                                style: TextStyle(
+                                  color: isOwnMessage
+                                      ? Colors.white.withValues(alpha: 0.8)
+                                      : Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 11,
+                                ),
                               ),
-                            ),
-                          ],
-                          // Message status indicator (WhatsApp-style ticks) for own messages
-                          if (isOwnMessage) ...[
-                            const SizedBox(width: 4),
-                            _buildMessageStatusIcon(message.status),
-                          ],
+                              if (message.isEdited) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '(edited)',
+                                  style: TextStyle(
+                                    color: isOwnMessage
+                                        ? Colors.white.withValues(alpha: 0.8)
+                                        : Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 10,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                              // Message status indicator (WhatsApp-style ticks) for own messages
+                              if (isOwnMessage) ...[
+                                const SizedBox(width: 4),
+                                _buildMessageStatusIcon(message.status),
+                              ],
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    // Reactions row
+                    if (message.reactions != null && message.reactions!.isNotEmpty)
+                      _buildReactionsRow(message, isOwnMessage),
+                  ],
                 ),
               ),
             ),
@@ -978,6 +1035,14 @@ class _DMChatScreenState extends State<DMChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                leading: const Icon(Icons.add_reaction_outlined, color: Colors.white70),
+                title: const Text('Add Reaction', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showReactionPicker(message);
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.reply, color: Colors.white70),
                 title: const Text('Reply', style: TextStyle(color: Colors.white)),
                 onTap: () {
@@ -1007,6 +1072,15 @@ class _DMChatScreenState extends State<DMChatScreen> {
                   _logger.logUI('DMChatScreen', 'message_copied',
                     data: {'messageId': message.id}
                   );
+                },
+              ),
+              ListTile(
+                leading: Text(_quickEmoji, style: const TextStyle(fontSize: 24)),
+                title: const Text('Quick Emoji', style: TextStyle(color: Colors.white)),
+                subtitle: const Text('Çift tıklama için emoji seç', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showQuickEmojiPicker();
                 },
               ),
               if (message.senderId == _authService.currentUser?.uid) ...[
@@ -1055,6 +1129,297 @@ class _DMChatScreenState extends State<DMChatScreen> {
                   },
                 ),
               ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Handle double-tap on message to add quick emoji reaction
+  void _onDoubleTapMessage(MessageModel message) {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+
+    _addReaction(message.id, _quickEmoji, userId);
+
+    // Show brief feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$_quickEmoji tepkisi eklendi'),
+        backgroundColor: const Color(0xFF4A9EFF),
+        duration: const Duration(milliseconds: 800),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(bottom: 100, left: 20, right: 20),
+      ),
+    );
+  }
+
+  /// Show picker to select quick emoji for double-tap
+  void _showQuickEmojiPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1D21),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          padding: EdgeInsets.only(bottom: bottomPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Çift Tıklama Emojisi Seç',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Mesaja çift tıkladığınızda bu emoji tepkisi eklenecek',
+                  style: TextStyle(color: Colors.white54, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Quick selection row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: ['❤️', '👍', '😂', '😮', '😢', '🔥', '👏', '🎉']
+                      .map((emoji) => GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              _setQuickEmoji(emoji);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _quickEmoji == emoji
+                                    ? const Color(0xFF4A9EFF).withValues(alpha: 0.3)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: _quickEmoji == emoji
+                                    ? Border.all(color: const Color(0xFF4A9EFF), width: 2)
+                                    : null,
+                              ),
+                              child: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const Divider(color: Color(0xFF2D3748), height: 1),
+              // Full emoji picker
+              Flexible(
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) {
+                    Navigator.pop(context);
+                    _setQuickEmoji(emoji.emoji);
+                  },
+                  config: Config(
+                    height: 200,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      backgroundColor: const Color(0xFF1A1D21),
+                      columns: 8,
+                      emojiSizeMax: 28,
+                    ),
+                    skinToneConfig: const SkinToneConfig(enabled: true),
+                    categoryViewConfig: const CategoryViewConfig(
+                      indicatorColor: Color(0xFF4A9EFF),
+                      iconColorSelected: Color(0xFF4A9EFF),
+                      backspaceColor: Color(0xFF4A9EFF),
+                      backgroundColor: Color(0xFF2D3748),
+                      iconColor: Colors.white70,
+                    ),
+                    bottomActionBarConfig: const BottomActionBarConfig(
+                      backgroundColor: Color(0xFF2D3748),
+                      buttonColor: Color(0xFF2D3748),
+                      buttonIconColor: Colors.white70,
+                    ),
+                    searchViewConfig: const SearchViewConfig(
+                      backgroundColor: Color(0xFF1A1D21),
+                      buttonIconColor: Colors.white70,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Set and save quick emoji
+  Future<void> _setQuickEmoji(String emoji) async {
+    setState(() => _quickEmoji = emoji);
+    await _prefsService.saveQuickEmoji(emoji);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$emoji çift tıklama emojisi olarak ayarlandı'),
+          backgroundColor: const Color(0xFF22C55E),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Widget _buildReactionsRow(MessageModel message, bool isOwnMessage) {
+    final currentUserId = _authService.currentUser?.uid;
+    final reactions = message.reactions!;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: reactions.entries.map((entry) {
+          final emoji = entry.key;
+          final userIds = List<String>.from(entry.value);
+          final hasReacted = currentUserId != null && userIds.contains(currentUserId);
+
+          return GestureDetector(
+            onTap: () {
+              if (currentUserId == null) return;
+              if (hasReacted) {
+                _removeReaction(message.id, emoji, currentUserId);
+              } else {
+                _addReaction(message.id, emoji, currentUserId);
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: hasReacted
+                    ? const Color(0xFF4A9EFF).withValues(alpha: 0.3)
+                    : const Color(0xFF2D3748),
+                borderRadius: BorderRadius.circular(12),
+                border: hasReacted
+                    ? Border.all(color: const Color(0xFF4A9EFF), width: 1)
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 14)),
+                  if (userIds.length > 1) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '${userIds.length}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _showReactionPicker(MessageModel message) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1D21),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Quick reactions row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉']
+                      .map((emoji) => GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              final userId = _authService.currentUser?.uid;
+                              if (userId != null) {
+                                _addReaction(message.id, emoji, userId);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const Divider(color: Color(0xFF2D3748), height: 1),
+              // Full emoji picker
+              SizedBox(
+                height: 300,
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) {
+                    Navigator.pop(context);
+                    final userId = _authService.currentUser?.uid;
+                    if (userId != null) {
+                      _addReaction(message.id, emoji.emoji, userId);
+                    }
+                  },
+                  config: Config(
+                    height: 300,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      backgroundColor: const Color(0xFF1A1D21),
+                      columns: 8,
+                      emojiSizeMax: 28,
+                    ),
+                    skinToneConfig: const SkinToneConfig(enabled: true),
+                    categoryViewConfig: const CategoryViewConfig(
+                      indicatorColor: Color(0xFF4A9EFF),
+                      iconColorSelected: Color(0xFF4A9EFF),
+                      backspaceColor: Color(0xFF4A9EFF),
+                      backgroundColor: Color(0xFF2D3748),
+                      iconColor: Colors.white70,
+                    ),
+                    bottomActionBarConfig: const BottomActionBarConfig(
+                      backgroundColor: Color(0xFF2D3748),
+                      buttonColor: Color(0xFF2D3748),
+                      buttonIconColor: Colors.white70,
+                    ),
+                    searchViewConfig: const SearchViewConfig(
+                      backgroundColor: Color(0xFF1A1D21),
+                      buttonIconColor: Colors.white70,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );

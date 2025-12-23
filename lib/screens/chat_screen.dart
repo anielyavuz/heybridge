@@ -17,6 +17,8 @@ import '../services/workspace_service.dart';
 import '../services/webhook_service.dart';
 import '../models/webhook_model.dart';
 import 'channel_settings_screen.dart';
+import '../widgets/linkified_text.dart';
+import '../services/preferences_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final WorkspaceModel workspace;
@@ -35,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _firestoreService = FirestoreService();
   final _channelService = ChannelService();
   final _workspaceService = WorkspaceService();
+  final _prefsService = PreferencesService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _messageFocusNode = FocusNode();
@@ -42,10 +45,12 @@ class _ChatScreenState extends State<ChatScreen> {
   MessageModel? _replyingTo;
   MessageModel? _editingMessage;
   late final Stream<List<MessageModel>> _messagesStream;
+  String _quickEmoji = '❤️';
 
   @override
   void initState() {
     super.initState();
+    _loadQuickEmoji();
     _logger.logUI(
       'ChatScreen',
       'screen_opened',
@@ -64,6 +69,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Mark channel as read when opening
     _markAsRead();
+  }
+
+  Future<void> _loadQuickEmoji() async {
+    final emoji = await _prefsService.getQuickEmoji();
+    if (mounted) {
+      setState(() => _quickEmoji = emoji);
+    }
   }
 
   Future<void> _markAsRead() async {
@@ -813,65 +825,307 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Handle double-tap on message to add quick emoji reaction
+  void _onDoubleTapMessage(MessageModel message) {
+    final userId = _authService.currentUser?.uid;
+    if (userId == null) return;
+
+    final currentUser = _authService.currentUser;
+    final senderName = currentUser?.displayName ??
+        currentUser?.email?.split('@')[0] ??
+        'Birisi';
+
+    _messageService.addReaction(
+      workspaceId: widget.workspace.id,
+      channelId: widget.channel.id,
+      messageId: message.id,
+      emoji: _quickEmoji,
+      userId: userId,
+      senderName: senderName,
+      channelName: widget.channel.name,
+    );
+
+    // Show brief feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$_quickEmoji tepkisi eklendi'),
+        backgroundColor: const Color(0xFF4A9EFF),
+        duration: const Duration(milliseconds: 800),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(bottom: 100, left: 20, right: 20),
+      ),
+    );
+  }
+
+  /// Show picker to select quick emoji for double-tap
+  void _showQuickEmojiPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1D21),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          padding: EdgeInsets.only(bottom: bottomPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Çift Tıklama Emojisi Seç',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Mesaja çift tıkladığınızda bu emoji tepkisi eklenecek',
+                  style: TextStyle(color: Colors.white54, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Quick selection row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: ['❤️', '👍', '😂', '😮', '😢', '🔥', '👏', '🎉']
+                      .map((emoji) => GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              _setQuickEmoji(emoji);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _quickEmoji == emoji
+                                    ? const Color(0xFF4A9EFF).withValues(alpha: 0.3)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: _quickEmoji == emoji
+                                    ? Border.all(color: const Color(0xFF4A9EFF), width: 2)
+                                    : null,
+                              ),
+                              child: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const Divider(color: Color(0xFF2D3748), height: 1),
+              // Full emoji picker
+              Flexible(
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) {
+                    Navigator.pop(context);
+                    _setQuickEmoji(emoji.emoji);
+                  },
+                  config: Config(
+                    height: 200,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      backgroundColor: const Color(0xFF1A1D21),
+                      columns: 8,
+                      emojiSizeMax: 28,
+                    ),
+                    skinToneConfig: const SkinToneConfig(enabled: true),
+                    categoryViewConfig: const CategoryViewConfig(
+                      indicatorColor: Color(0xFF4A9EFF),
+                      iconColorSelected: Color(0xFF4A9EFF),
+                      backspaceColor: Color(0xFF4A9EFF),
+                      backgroundColor: Color(0xFF2D3748),
+                      iconColor: Colors.white70,
+                    ),
+                    bottomActionBarConfig: const BottomActionBarConfig(
+                      backgroundColor: Color(0xFF2D3748),
+                      buttonColor: Color(0xFF2D3748),
+                      buttonIconColor: Colors.white70,
+                    ),
+                    searchViewConfig: const SearchViewConfig(
+                      backgroundColor: Color(0xFF1A1D21),
+                      buttonIconColor: Colors.white70,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Set and save quick emoji
+  Future<void> _setQuickEmoji(String emoji) async {
+    setState(() => _quickEmoji = emoji);
+    await _prefsService.saveQuickEmoji(emoji);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$emoji çift tıklama emojisi olarak ayarlandı'),
+          backgroundColor: const Color(0xFF22C55E),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _showEmojiReactionPicker(MessageModel message) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF2D3748),
+      backgroundColor: const Color(0xFF1A1D21),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
-        return SizedBox(
-          height: 350,
-          child: EmojiPicker(
-            onEmojiSelected: (category, emoji) async {
-              Navigator.pop(context);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Quick reactions row
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉']
+                      .map((emoji) => GestureDetector(
+                            onTap: () async {
+                              Navigator.pop(context);
+                              final userId = _authService.currentUser?.uid;
+                              if (userId == null) return;
 
-              final userId = _authService.currentUser?.uid;
-              if (userId == null) return;
+                              final currentUser = _authService.currentUser;
+                              final senderName = currentUser?.displayName ??
+                                  currentUser?.email?.split('@')[0] ??
+                                  'Birisi';
 
-              try {
-                await _messageService.addReaction(
-                  workspaceId: widget.workspace.id,
-                  channelId: widget.channel.id,
-                  messageId: message.id,
-                  emoji: emoji.emoji,
-                  userId: userId,
-                );
+                              try {
+                                await _messageService.addReaction(
+                                  workspaceId: widget.workspace.id,
+                                  channelId: widget.channel.id,
+                                  messageId: message.id,
+                                  emoji: emoji,
+                                  userId: userId,
+                                  senderName: senderName,
+                                  channelName: widget.channel.name,
+                                );
+                                _logger.logUI(
+                                  'ChatScreen',
+                                  'reaction_added',
+                                  data: {'messageId': message.id, 'emoji': emoji},
+                                );
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to add reaction: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const Divider(color: Color(0xFF2D3748), height: 1),
+              // Full emoji picker
+              SizedBox(
+                height: 300,
+                child: EmojiPicker(
+                  onEmojiSelected: (category, emoji) async {
+                    Navigator.pop(context);
 
-                _logger.logUI(
-                  'ChatScreen',
-                  'reaction_added',
-                  data: {'messageId': message.id, 'emoji': emoji.emoji},
-                );
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to add reaction: $e'),
-                      backgroundColor: Colors.red,
+                    final userId = _authService.currentUser?.uid;
+                    if (userId == null) return;
+
+                    final currentUser = _authService.currentUser;
+                    final senderName = currentUser?.displayName ??
+                        currentUser?.email?.split('@')[0] ??
+                        'Birisi';
+
+                    try {
+                      await _messageService.addReaction(
+                        workspaceId: widget.workspace.id,
+                        channelId: widget.channel.id,
+                        messageId: message.id,
+                        emoji: emoji.emoji,
+                        userId: userId,
+                        senderName: senderName,
+                        channelName: widget.channel.name,
+                      );
+
+                      _logger.logUI(
+                        'ChatScreen',
+                        'reaction_added',
+                        data: {'messageId': message.id, 'emoji': emoji.emoji},
+                      );
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to add reaction: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  config: Config(
+                    height: 300,
+                    checkPlatformCompatibility: true,
+                    emojiViewConfig: EmojiViewConfig(
+                      backgroundColor: const Color(0xFF1A1D21),
+                      columns: 8,
+                      emojiSizeMax: 28,
                     ),
-                  );
-                }
-              }
-            },
-            config: Config(
-              height: 256,
-              checkPlatformCompatibility: true,
-              emojiViewConfig: EmojiViewConfig(
-                backgroundColor: const Color(0xFF1A1D21),
-                columns: 7,
-                emojiSizeMax: 32,
+                    skinToneConfig: const SkinToneConfig(enabled: true),
+                    categoryViewConfig: const CategoryViewConfig(
+                      indicatorColor: Color(0xFF4A9EFF),
+                      iconColorSelected: Color(0xFF4A9EFF),
+                      backspaceColor: Color(0xFF4A9EFF),
+                      backgroundColor: Color(0xFF2D3748),
+                      iconColor: Colors.white70,
+                    ),
+                    bottomActionBarConfig: const BottomActionBarConfig(
+                      backgroundColor: Color(0xFF2D3748),
+                      buttonColor: Color(0xFF2D3748),
+                      buttonIconColor: Colors.white70,
+                    ),
+                    searchViewConfig: const SearchViewConfig(
+                      backgroundColor: Color(0xFF1A1D21),
+                      buttonIconColor: Colors.white70,
+                    ),
+                  ),
+                ),
               ),
-              categoryViewConfig: const CategoryViewConfig(
-                indicatorColor: Color(0xFF4A9EFF),
-                iconColorSelected: Color(0xFF4A9EFF),
-                backgroundColor: Color(0xFF2D3748),
-                iconColor: Colors.white70,
-              ),
-              bottomActionBarConfig: const BottomActionBarConfig(
-                backgroundColor: Color(0xFF2D3748),
-                buttonColor: Color(0xFF2D3748),
-                buttonIconColor: Colors.white70,
-              ),
-            ),
+            ],
           ),
         );
       },
@@ -894,6 +1148,20 @@ class _ChatScreenState extends State<ChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                leading: const Icon(
+                  Icons.add_reaction_outlined,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'Add Reaction',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEmojiReactionPicker(message);
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.reply, color: Colors.white70),
                 title: const Text(
                   'Reply',
@@ -906,20 +1174,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     _showEmojiPicker = false;
                   });
                   _messageFocusNode.requestFocus();
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.add_reaction_outlined,
-                  color: Colors.white70,
-                ),
-                title: const Text(
-                  'Add Reaction',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showEmojiReactionPicker(message);
                 },
               ),
               ListTile(
@@ -945,6 +1199,21 @@ class _ChatScreenState extends State<ChatScreen> {
                     'message_copied',
                     data: {'messageId': message.id},
                   );
+                },
+              ),
+              ListTile(
+                leading: Text(_quickEmoji, style: const TextStyle(fontSize: 24)),
+                title: const Text(
+                  'Quick Emoji',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Çift tıklama için emoji seç',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showQuickEmojiPicker();
                 },
               ),
               // Star/Unstar message
@@ -1281,9 +1550,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
 
-                  // Message Container with Long Press
+                  // Message Container with Long Press and Double Tap
                   GestureDetector(
                     onLongPress: () => _showMessageOptions(message),
+                    onDoubleTap: () => _onDoubleTapMessage(message),
                     child: Container(
                       constraints: BoxConstraints(
                         maxWidth: MediaQuery.of(context).size.width * 0.75,
@@ -1391,9 +1661,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               },
                             ),
 
-                          // Message text
-                          Text(
-                            message.text,
+                          // Message text with clickable links
+                          LinkifiedText(
+                            text: message.text,
                             textAlign: TextAlign.start,
                             style: TextStyle(
                               color: message.isDeleted
@@ -1489,6 +1759,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             onTap: () async {
                               if (currentUserId == null) return;
 
+                              final currentUser = _authService.currentUser;
+                              final senderName = currentUser?.displayName ??
+                                  currentUser?.email?.split('@')[0] ??
+                                  'Birisi';
+
                               try {
                                 if (hasReacted) {
                                   // Remove reaction
@@ -1507,6 +1782,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     messageId: message.id,
                                     emoji: emoji,
                                     userId: currentUserId,
+                                    senderName: senderName,
+                                    channelName: widget.channel.name,
                                   );
                                 }
                               } catch (e) {

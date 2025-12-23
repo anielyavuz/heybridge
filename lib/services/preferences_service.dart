@@ -2,6 +2,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class PreferencesService {
   static const String _lastWorkspaceIdKey = 'last_workspace_id';
+  static const String _quickEmojiKey = 'quick_emoji';
+  static const String _defaultQuickEmoji = '❤️';
 
   // Singleton pattern
   static final PreferencesService _instance = PreferencesService._internal();
@@ -36,5 +38,22 @@ class PreferencesService {
   Future<void> clearAll() async {
     await init();
     await _prefs?.clear();
+  }
+
+  // Save quick emoji for double-tap reaction
+  Future<void> saveQuickEmoji(String emoji) async {
+    await init();
+    await _prefs?.setString(_quickEmojiKey, emoji);
+  }
+
+  // Get quick emoji (default: ❤️)
+  Future<String> getQuickEmoji() async {
+    await init();
+    return _prefs?.getString(_quickEmojiKey) ?? _defaultQuickEmoji;
+  }
+
+  // Get quick emoji synchronously (after init)
+  String getQuickEmojiSync() {
+    return _prefs?.getString(_quickEmojiKey) ?? _defaultQuickEmoji;
   }
 }

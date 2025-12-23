@@ -154,6 +154,8 @@ class MessageService {
     required String messageId,
     required String emoji,
     required String userId,
+    String? senderName,
+    String? channelName,
   }) async {
     final messageRef = _firestore
       .collection('workspaces')
@@ -162,6 +164,16 @@ class MessageService {
       .doc(channelId)
       .collection('messages')
       .doc(messageId);
+
+    // Get message data before transaction for notification
+    String? messageText;
+    String? messageSenderId;
+    final messageSnapshot = await messageRef.get();
+    if (messageSnapshot.exists) {
+      final msgData = messageSnapshot.data()!;
+      messageText = msgData['text'] as String?;
+      messageSenderId = msgData['senderId'] as String?;
+    }
 
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(messageRef);
@@ -182,6 +194,28 @@ class MessageService {
 
       transaction.update(messageRef, {'reactions': reactions});
     });
+
+    // Send notification to message owner (if not self and sender info provided)
+    if (messageSenderId != null &&
+        messageSenderId != userId &&
+        messageText != null &&
+        senderName != null &&
+        channelName != null) {
+      // Truncate message if too long
+      final truncatedMessage = messageText.length > 30
+          ? '${messageText.substring(0, 30)}...'
+          : messageText;
+
+      _fcmService.notifyChannelMessage(
+        workspaceId: workspaceId,
+        channelId: channelId,
+        channelName: channelName,
+        senderId: userId,
+        senderName: senderName,
+        message: '$emoji "$truncatedMessage" mesajına tepki verdi',
+        messageId: messageId,
+      );
+    }
   }
 
   // Remove reaction from a message

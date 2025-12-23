@@ -13,15 +13,9 @@ class WebRTCConfig {
     'sdpSemantics': 'unified-plan',
   };
 
-  // Audio-only media constraints
+  // Audio-only media constraints (cross-platform compatible)
   static final Map<String, dynamic> mediaConstraints = {
-    'audio': {
-      'echoCancellation': true,
-      'noiseSuppression': true,
-      'autoGainControl': true,
-      'sampleRate': 48000,
-      'channelCount': 1,
-    },
+    'audio': true,  // Basit constraint, tüm platformlarda çalışır
     'video': false,
   };
 

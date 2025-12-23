@@ -6,15 +6,69 @@ import 'package:permission_handler/permission_handler.dart';
 import '../config/webrtc_config.dart';
 import '../services/logger_service.dart';
 
+/// WebRTC connection statistics for monitoring
+class WebRTCStats {
+  // Connection info
+  String connectionState = 'disconnected';
+  String iceConnectionState = 'new';
+  String iceGatheringState = 'new';
+  String signalingState = 'stable';
+
+  // Audio stats
+  double? audioLevel;
+  int? packetsReceived;
+  int? packetsSent;
+  int? packetsLost;
+  double? jitter;
+  int? bytesReceived;
+  int? bytesSent;
+  double? roundTripTime;
+
+  // Codec info
+  String? audioCodec;
+  int? sampleRate;
+
+  // ICE candidates
+  String? localCandidateType;
+  String? remoteCandidateType;
+  String? localAddress;
+  String? remoteAddress;
+
+  // Timestamps
+  DateTime? lastUpdated;
+
+  void reset() {
+    connectionState = 'disconnected';
+    iceConnectionState = 'new';
+    iceGatheringState = 'new';
+    signalingState = 'stable';
+    audioLevel = null;
+    packetsReceived = null;
+    packetsSent = null;
+    packetsLost = null;
+    jitter = null;
+    bytesReceived = null;
+    bytesSent = null;
+    roundTripTime = null;
+    audioCodec = null;
+    sampleRate = null;
+    localCandidateType = null;
+    remoteCandidateType = null;
+    localAddress = null;
+    remoteAddress = null;
+    lastUpdated = null;
+  }
+}
+
 /// Voice channel state
 enum VoiceChannelState {
-  idle,        // Not in voice channel
-  joining,     // Connecting to voice channel
-  waiting,     // In voice channel, waiting for other user
-  connecting,  // WebRTC connection in progress
-  active,      // In voice channel, connected with other user
-  reconnecting,// Connection issue, trying to reconnect
-  leaving,     // Disconnecting from voice channel
+  idle, // Not in voice channel
+  joining, // Connecting to voice channel
+  waiting, // In voice channel, waiting for other user
+  connecting, // WebRTC connection in progress
+  active, // In voice channel, connected with other user
+  reconnecting, // Connection issue, trying to reconnect
+  leaving, // Disconnecting from voice channel
 }
 
 /// Voice channel provider for managing WebRTC voice sessions in DMs
@@ -43,8 +97,13 @@ class VoiceChannelProvider extends ChangeNotifier {
   StreamSubscription? _sessionSubscription;
   StreamSubscription? _signalingSubscription;
 
+  // WebRTC Stats for monitoring
+  Timer? _statsTimer;
+  WebRTCStats _stats = WebRTCStats();
+
   // Getters
   VoiceChannelState get state => _state;
+  WebRTCStats get stats => _stats;
   String? get currentDmId => _currentDmId;
   String? get currentSessionId => _currentSessionId;
   bool get isMuted => _isMuted;
@@ -63,20 +122,29 @@ class VoiceChannelProvider extends ChangeNotifier {
   /// Returns: 'granted', 'denied', 'permanentlyDenied'
   Future<String> requestMicrophonePermission() async {
     var status = await Permission.microphone.status;
-    _logger.info('Microphone permission status: ${status.name}', category: 'VOICE');
+    _logger.info(
+      'Microphone permission status: ${status.name}',
+      category: 'VOICE',
+    );
 
     if (status.isGranted) {
       return 'granted';
     }
 
     if (status.isPermanentlyDenied) {
-      _logger.warning('Microphone permission permanently denied', category: 'VOICE');
+      _logger.warning(
+        'Microphone permission permanently denied',
+        category: 'VOICE',
+      );
       return 'permanentlyDenied';
     }
 
     // Request permission
     status = await Permission.microphone.request();
-    _logger.info('Microphone permission after request: ${status.name}', category: 'VOICE');
+    _logger.info(
+      'Microphone permission after request: ${status.name}',
+      category: 'VOICE',
+    );
 
     if (status.isGranted) {
       return 'granted';
@@ -111,10 +179,11 @@ class VoiceChannelProvider extends ChangeNotifier {
       _otherUserId = otherUserId;
       _errorMessage = null;
 
-      _logger.info('Joining voice channel', category: 'VOICE', data: {
-        'dmId': dmId,
-        'userId': currentUserId,
-      });
+      _logger.info(
+        'Joining voice channel',
+        category: 'VOICE',
+        data: {'dmId': dmId, 'userId': currentUserId},
+      );
 
       // Request microphone permission
       final permissionResult = await requestMicrophonePermission();
@@ -129,7 +198,9 @@ class VoiceChannelProvider extends ChangeNotifier {
       }
 
       // Get local audio stream
-      _localStream = await webrtc.navigator.mediaDevices.getUserMedia(WebRTCConfig.mediaConstraints);
+      _localStream = await webrtc.navigator.mediaDevices.getUserMedia(
+        WebRTCConfig.mediaConstraints,
+      );
       _logger.debug('Local stream acquired', category: 'VOICE');
 
       // Get or create voice session
@@ -306,10 +377,17 @@ class VoiceChannelProvider extends ChangeNotifier {
     // Handle connection state
     _peerConnection?.onConnectionState = (state) {
       _logger.debug('Connection state: $state', category: 'VOICE');
-      if (state == webrtc.RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      if (state ==
+          webrtc.RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _setState(VoiceChannelState.active);
-      } else if (state == webrtc.RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-                 state == webrtc.RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+        _startStatsCollection(); // Start collecting stats when connected
+      } else if (state ==
+              webrtc.RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+          state ==
+              webrtc
+                  .RTCPeerConnectionState
+                  .RTCPeerConnectionStateDisconnected) {
+        _stopStatsCollection(); // Stop stats collection on disconnect
         if (_state == VoiceChannelState.active) {
           _setState(VoiceChannelState.reconnecting);
           _attemptReconnect();
@@ -337,7 +415,10 @@ class VoiceChannelProvider extends ChangeNotifier {
       final data = snapshot.data() as Map<String, dynamic>;
       final participants = List<String>.from(data['activeParticipants'] ?? []);
 
-      _logger.debug('Session updated, participants: $participants', category: 'VOICE');
+      _logger.debug(
+        'Session updated, participants: $participants',
+        category: 'VOICE',
+      );
 
       // Check if other user joined
       if (participants.contains(_otherUserId) &&
@@ -347,7 +428,7 @@ class VoiceChannelProvider extends ChangeNotifier {
           _initiateWebRTCConnection();
         }
       } else if (!participants.contains(_otherUserId) &&
-                 _state == VoiceChannelState.active) {
+          _state == VoiceChannelState.active) {
         // Other user left
         _logger.info('Other user left the voice channel', category: 'VOICE');
         _setState(VoiceChannelState.waiting);
@@ -364,12 +445,12 @@ class VoiceChannelProvider extends ChangeNotifier {
         .where('to', isEqualTo: _currentUserId)
         .snapshots()
         .listen((snapshot) async {
-      for (final change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          await _processSignal(change.doc);
-        }
-      }
-    });
+          for (final change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              await _processSignal(change.doc);
+            }
+          }
+        });
   }
 
   /// Process incoming signaling message
@@ -407,57 +488,101 @@ class VoiceChannelProvider extends ChangeNotifier {
 
   /// Handle incoming offer
   Future<void> _handleOffer(Map<String, dynamic> data) async {
-    _setState(VoiceChannelState.connecting);
+    try {
+      _setState(VoiceChannelState.connecting);
 
-    final description = webrtc.RTCSessionDescription(
-      data['sdp'],
-      data['type'],
-    );
+      final sdp = data['sdp'] as String?;
+      final type = data['type'] as String?;
 
-    await _peerConnection?.setRemoteDescription(description);
+      if (sdp == null || type == null) {
+        _logger.error(
+          'Invalid offer data: sdp or type is null',
+          category: 'VOICE',
+        );
+        return;
+      }
 
-    // Create answer
-    final answer = await _peerConnection?.createAnswer(
-      WebRTCConfig.answerSdpConstraints,
-    );
-    await _peerConnection?.setLocalDescription(answer!);
+      final description = webrtc.RTCSessionDescription(sdp, type);
 
-    // Send answer
-    await _sendSignal('answer', {
-      'sdp': answer?.sdp,
-      'type': answer?.type,
-    });
+      await _peerConnection?.setRemoteDescription(description);
 
-    _logger.debug('Sent answer', category: 'VOICE');
+      // Create answer
+      final answer = await _peerConnection?.createAnswer(
+        WebRTCConfig.answerSdpConstraints,
+      );
+
+      if (answer == null) {
+        _logger.error('Failed to create answer', category: 'VOICE');
+        return;
+      }
+
+      await _peerConnection?.setLocalDescription(answer);
+
+      // Send answer
+      await _sendSignal('answer', {'sdp': answer.sdp, 'type': answer.type});
+
+      _logger.debug('Sent answer', category: 'VOICE');
+    } catch (e) {
+      _logger.error('Error handling offer: $e', category: 'VOICE');
+    }
   }
 
   /// Handle incoming answer
   Future<void> _handleAnswer(Map<String, dynamic> data) async {
-    final description = webrtc.RTCSessionDescription(
-      data['sdp'],
-      data['type'],
-    );
+    try {
+      final sdp = data['sdp'] as String?;
+      final type = data['type'] as String?;
 
-    await _peerConnection?.setRemoteDescription(description);
-    _logger.debug('Answer set', category: 'VOICE');
+      if (sdp == null || type == null) {
+        _logger.error(
+          'Invalid answer data: sdp or type is null',
+          category: 'VOICE',
+        );
+        return;
+      }
+
+      final description = webrtc.RTCSessionDescription(sdp, type);
+      await _peerConnection?.setRemoteDescription(description);
+      _logger.debug('Answer set', category: 'VOICE');
+    } catch (e) {
+      _logger.error('Error handling answer: $e', category: 'VOICE');
+    }
   }
 
   /// Handle incoming ICE candidate
   Future<void> _handleIceCandidate(Map<String, dynamic> data) async {
-    final candidate = webrtc.RTCIceCandidate(
-      data['candidate'],
-      data['sdpMid'],
-      data['sdpMLineIndex'],
-    );
+    try {
+      final candidateStr = data['candidate'] as String?;
+      final sdpMid = data['sdpMid'] as String?;
+      final sdpMLineIndex = data['sdpMLineIndex'] as int?;
 
-    await _peerConnection?.addCandidate(candidate);
-    _logger.debug('ICE candidate added', category: 'VOICE');
+      if (candidateStr == null) {
+        _logger.warning('ICE candidate is null, skipping', category: 'VOICE');
+        return;
+      }
+
+      final candidate = webrtc.RTCIceCandidate(
+        candidateStr,
+        sdpMid ?? '',
+        sdpMLineIndex ?? 0,
+      );
+
+      await _peerConnection?.addCandidate(candidate);
+      _logger.debug('ICE candidate added', category: 'VOICE');
+    } catch (e) {
+      _logger.error('Error handling ICE candidate: $e', category: 'VOICE');
+    }
   }
 
   /// Initiate WebRTC connection (create and send offer)
   Future<void> _initiateWebRTCConnection() async {
     // Only the user with the smaller userId creates the offer
     // This prevents both users from creating offers simultaneously
+    if (_currentUserId == null || _otherUserId == null) {
+      _logger.error('User IDs are null', category: 'VOICE');
+      return;
+    }
+
     if (_currentUserId!.compareTo(_otherUserId!) > 0) {
       _logger.debug('Waiting for offer from other user', category: 'VOICE');
       _setState(VoiceChannelState.connecting);
@@ -472,13 +597,17 @@ class VoiceChannelProvider extends ChangeNotifier {
       final offer = await _peerConnection?.createOffer(
         WebRTCConfig.offerSdpConstraints,
       );
-      await _peerConnection?.setLocalDescription(offer!);
+
+      if (offer == null) {
+        _logger.error('Failed to create offer', category: 'VOICE');
+        _setState(VoiceChannelState.waiting);
+        return;
+      }
+
+      await _peerConnection?.setLocalDescription(offer);
 
       // Send offer
-      await _sendSignal('offer', {
-        'sdp': offer?.sdp,
-        'type': offer?.type,
-      });
+      await _sendSignal('offer', {'sdp': offer.sdp, 'type': offer.type});
 
       _logger.debug('Sent offer', category: 'VOICE');
     } catch (e) {
@@ -542,8 +671,107 @@ class VoiceChannelProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Start collecting WebRTC stats periodically
+  void _startStatsCollection() {
+    _statsTimer?.cancel();
+    _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _collectStats();
+    });
+  }
+
+  /// Stop stats collection
+  void _stopStatsCollection() {
+    _statsTimer?.cancel();
+    _statsTimer = null;
+    _stats.reset();
+  }
+
+  /// Collect WebRTC statistics
+  Future<void> _collectStats() async {
+    if (_peerConnection == null) return;
+
+    try {
+      // Get connection states
+      _stats.connectionState =
+          _peerConnection?.connectionState?.name ?? 'unknown';
+      _stats.iceConnectionState =
+          _peerConnection?.iceConnectionState?.name ?? 'unknown';
+      _stats.iceGatheringState =
+          _peerConnection?.iceGatheringState?.name ?? 'unknown';
+      _stats.signalingState =
+          _peerConnection?.signalingState?.name ?? 'unknown';
+
+      // Get RTC stats
+      final statsReport = await _peerConnection?.getStats();
+      if (statsReport != null) {
+        for (final report in statsReport) {
+          final values = report.values;
+
+          // Inbound audio stats (receiving)
+          if (report.type == 'inbound-rtp' && values['kind'] == 'audio') {
+            _stats.packetsReceived = values['packetsReceived'] as int?;
+            _stats.packetsLost = values['packetsLost'] as int?;
+            _stats.jitter = (values['jitter'] as num?)?.toDouble();
+            _stats.bytesReceived = values['bytesReceived'] as int?;
+          }
+
+          // Outbound audio stats (sending)
+          if (report.type == 'outbound-rtp' && values['kind'] == 'audio') {
+            _stats.packetsSent = values['packetsSent'] as int?;
+            _stats.bytesSent = values['bytesSent'] as int?;
+          }
+
+          // Audio level
+          if (report.type == 'media-source' && values['kind'] == 'audio') {
+            _stats.audioLevel = (values['audioLevel'] as num?)?.toDouble();
+          }
+
+          // Codec info
+          if (report.type == 'codec' &&
+              values['mimeType']?.toString().contains('audio') == true) {
+            _stats.audioCodec = values['mimeType'] as String?;
+            _stats.sampleRate = values['clockRate'] as int?;
+          }
+
+          // Candidate pair (connection path)
+          if (report.type == 'candidate-pair' &&
+              values['state'] == 'succeeded') {
+            _stats.roundTripTime = (values['currentRoundTripTime'] as num?)
+                ?.toDouble();
+
+            // Get local candidate info
+            final localCandidateId = values['localCandidateId'] as String?;
+            final remoteCandidateId = values['remoteCandidateId'] as String?;
+
+            for (final r in statsReport) {
+              if (r.id == localCandidateId) {
+                _stats.localCandidateType =
+                    r.values['candidateType'] as String?;
+                _stats.localAddress =
+                    '${r.values['address']}:${r.values['port']}';
+              }
+              if (r.id == remoteCandidateId) {
+                _stats.remoteCandidateType =
+                    r.values['candidateType'] as String?;
+                _stats.remoteAddress =
+                    '${r.values['address']}:${r.values['port']}';
+              }
+            }
+          }
+        }
+      }
+
+      _stats.lastUpdated = DateTime.now();
+      notifyListeners();
+    } catch (e) {
+      _logger.error('Error collecting stats: $e', category: 'VOICE');
+    }
+  }
+
   /// Cleanup resources
   void _cleanup() {
+    _stopStatsCollection();
+
     _sessionSubscription?.cancel();
     _sessionSubscription = null;
 
